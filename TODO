@@ -1,0 +1,9 @@
+Fixes: ----------------------------------------
+- Remove entity_index from entity.
+- synchronize inputs with main loop
+Features: --------------------------------------
+- combat system ( cooldowns for attacks etc.)
+- hud
+- show hp etc. on enemies
+Test:
+- on_hit / kill etc.
