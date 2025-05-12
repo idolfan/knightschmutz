@@ -11,6 +11,7 @@ resizeCanvas();
 // ----------------------------------------------------------------------- End canvas -----------------------------------------------------------------------------------------------
 // ----------------------------------------------------------------------- Game state -----------------------------------------------------------------------------------------------
 
+const ticks_per_second = 60;
 const world_area_size = 100;
 let cell_size = 40;
 const cell_margin = 4;
@@ -38,7 +39,7 @@ let hovered_entity;
 area_board = Array.from({ length: world_area_size }, () => Array(world_area_size).fill(0));
 for (let i = 0; i < world_area_size; i++) {
     for (let j = 0; j < world_area_size; j++) {
-        area_board[i][j] = Math.random() < 0.66 ? 1 : 0; // Randomly fill the area with 1s and 0s
+        area_board[i][j] = Math.random() < 0.66 ? 1 : 0;
     }
 }
 
@@ -51,16 +52,23 @@ const player = {
 add_player(player);
 const player_entity = entities[player.entity_index];
 
+player_entity.on_kill.push((combat_context) => {
+    console.log('HEAL', combat_context);
+    combat_context.source_entity.hp += combat_context.source_entity.max_hp * 0.25;
+})
+
 /** @type {Array<Entity>} */
 const start_entites = [
     {
         display_name: "test",
-        x: 10,
-        y: 10,
+        x: 40,
+        y: 40,
         speed: get_random_int(2, 8),
         path: null,
         entity_type: 'ENEMY',
-        hp: 10,
+        max_hp: 10,
+        attack_speed: 1,
+        attack_timer: ticks_per_second,
     },
     {
         display_name: "test2",
@@ -69,7 +77,9 @@ const start_entites = [
         speed: get_random_int(2, 8),
         path: null,
         entity_type: 'ENEMY',
-        hp: 10,
+        max_hp: 10,
+        attack_speed: 1,
+        attack_timer: ticks_per_second,
     },
     {
         display_name: "test3",
@@ -78,7 +88,9 @@ const start_entites = [
         speed: get_random_int(2, 8),
         path: null,
         entity_type: 'ENEMY',
-        hp: 10,
+        max_hp: 10,
+        attack_speed: 1,
+        attack_timer: ticks_per_second,
     }
 ]
 
@@ -93,6 +105,8 @@ for (let i = 0; i < start_entites.length; i++) {
 /** @type {(entity: Entity) => Entity} */
 function add_entity(entity) {
     entity.id = id_counter++;
+    if (entity.max_hp) entity.hp = entity.max_hp;
+
     entities.push(entity);
     entity.entity_index = entities.length - 1;
     if (entity.entity_type === 'PLAYER') {
@@ -114,7 +128,13 @@ function add_player(player) {
         y: 10,
         speed: 5,
         entity_type: 'PLAYER',
-        hp: 20,
+        max_hp: 30,
+        attack_speed: 0.7,
+        attack_timer: ticks_per_second,
+        on_kill: [],
+        on_death: [],
+        on_scored_hit: [],
+        on_taken_hit: [],
     }
     player.entity_index = add_entity(player_entity).entity_index;
     player.player_index = players.length;
@@ -129,7 +149,8 @@ function damage_entity(combat_context) {
     entity_on_taken_hit(combat_context);
     entity_on_scored_hit(combat_context);
     if (target_entity.hp <= 0) {
-        entity_on_death(combat_context)
+        entity_on_kill(combat_context);
+        entity_on_death(combat_context);
     }
     console.log('Damaged entity', target_entity);
 }
@@ -139,10 +160,12 @@ function entity_on_death(combat_context) {
     const dying_entity = combat_context.target_entity;
     const source_entity = combat_context.source_entity;
 
-    if(source_entity.chasing_entity == dying_entity){
+    if (source_entity.chasing_entity == dying_entity) {
         source_entity.chasing_entity == undefined;
         delete source_entity.chasing_action_and_context;
     }
+    entity_positions[dying_entity.x][dying_entity.y] = null;
+
     entities_marked_for_delete.push(dying_entity);
     if (dying_entity.on_death) {
         dying_entity.on_death.forEach(on_death_callback => {
@@ -167,6 +190,16 @@ function entity_on_taken_hit(combat_context) {
     if (hit_entity.on_taken_hit) {
         hit_entity.on_taken_hit.forEach(on_taken_hit_callback => {
             on_taken_hit_callback(combat_context);
+        })
+    }
+}
+
+/** @type {(combat_context: Combat_Context)} */
+function entity_on_kill(combat_context) {
+    const killer_entity = combat_context.source_entity;
+    if (killer_entity?.on_kill) {
+        killer_entity.on_kill.forEach(on_kill_callback => {
+            on_kill_callback(combat_context);
         })
     }
 }
@@ -207,17 +240,24 @@ function draw() {
     for (let i = 0; i < players.length; i++) {
         const player = players[i];
         const entity = entities[player.entity_index];
+        const path_offset = [0, 0];
+        if (entity.path?.path_steps) {
+            const next_cell = entity.path.path_steps[0];
+            if (next_cell) {
+                path_offset[0] = (next_cell[0] - entity.x) * entity.path.progress / ticks_per_second;
+                path_offset[1] = (next_cell[1] - entity.y) * entity.path.progress / ticks_per_second;
+            }
+        }
         ctx.fillStyle = 'blue';
-        ctx.fillRect(entity.x * cell_size + cell_margin, entity.y * cell_size + cell_margin, cell_size - cell_margin * 2, cell_size - cell_margin * 2);
+        ctx.fillRect((entity.x + path_offset[0]) * cell_size + cell_margin, (entity.y + path_offset[1]) * cell_size + cell_margin, cell_size - cell_margin * 2, cell_size - cell_margin * 2);
         ctx.strokeStyle = 'black';
-        ctx.strokeRect(entity.x * cell_size + cell_margin, entity.y * cell_size + cell_margin, cell_size - cell_margin * 2, cell_size - cell_margin * 2);
+        ctx.strokeRect((entity.x + path_offset[0]) * cell_size + cell_margin, (entity.y + path_offset[1]) * cell_size + cell_margin, cell_size - cell_margin * 2, cell_size - cell_margin * 2);
     }
 
     // Draw paths
     for (let i = 0; i < paths.length; i++) {
         const path = paths[i];
-        ctx.fillStyle = 'red';
-        ctx.strokeStyle = 'black';
+        if(player_entity.path != path) continue;
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.strokeStyle = 'green';
@@ -254,6 +294,19 @@ function draw() {
             if (hovered_entity == entity) ctx.strokeStyle = 'orange';
             ctx.strokeRect((entity.x + path_offset[0]) * cell_size + cell_margin, (entity.y + path_offset[1]) * cell_size + cell_margin, cell_size - cell_margin * 2, cell_size - cell_margin * 2);
         }
+
+        ctx.fillStyle = "rgb(0,0,0,0.7)";
+        const damage_percent = 1 - Math.max(0, Math.min(1, entity.hp / entity.max_hp));
+        ctx.fillRect((entity.x + path_offset[0]) * cell_size + cell_margin, (entity.y + path_offset[1]) * cell_size + cell_margin, cell_size - cell_margin * 2, (cell_size - cell_margin * 2) * damage_percent);
+
+        const attack_percent = Math.min(1, entity.attack_speed * entity.attack_timer / ticks_per_second);
+        ctx.strokeStyle = 'yellow';
+        ctx.beginPath();
+        ctx.moveTo((entity.x + path_offset[0]) * cell_size + cell_margin,
+            (entity.y + path_offset[1] + 1) * cell_size - cell_margin);
+        ctx.lineTo((entity.x + path_offset[0]) * cell_size + cell_margin + (cell_size - cell_margin * 2) * attack_percent,
+            (entity.y + path_offset[1] + 1) * cell_size - cell_margin);
+        ctx.stroke();
     }
 
     if (time_since_entity_hovered >= 15) {
@@ -281,7 +334,7 @@ const keys_pressed = {
     d: false,
     shift: false,
 }
-const camera_speed = 16;
+const camera_speed = 10;
 
 window.addEventListener('keydown', (event) => {
     const key = event.key;
@@ -384,15 +437,11 @@ window.addEventListener('mousedown', (event) => {
             const hovered_entity_index = hovered_entity?.entity_index;
             if (hovered_entity_index != undefined) {
                 const target_entity = entities[hovered_entity_index];
+                if(!target_entity) break;
                 const context = { target_entity, source_entity: player_entity }
-                if (get_distance(context) >= 1.5) {
-                    player_entity.chasing_entity = target_entity;
-                    player_entity.chasing_action_and_context = { action: melee_attack, context: context };
-                    const path_steps = calculate_path_positions([player_entity.x, player_entity.y], [target_entity.x, target_entity.y]);
-                    if (path_steps != null) {
-                        change_path(player_entity, path_steps);
-                    }
-                }
+                //if (get_distance(context) >= 1.5) {
+                chase_entity(player_entity, target_entity, melee_attack);
+                //}
                 take_action(context, melee_attack);
             }
             break;
@@ -424,7 +473,10 @@ window.addEventListener("mousemove", (event) => {
 
 
 render();
-const ticks_per_second = 60;
+
+/** @type {Array<Array<Entity>>} */
+const entity_positions = Array.from({ length: world_area_size }, () => Array(world_area_size).fill(null));
+
 
 function tick() {
     // Process paths
@@ -439,16 +491,33 @@ function tick() {
 
         if (entity.chasing_entity) {
             path_steps = calculate_path_positions([entity.x, entity.y], [entity.chasing_entity.x, entity.chasing_entity.y]);
-            change_path(entity, path_steps);
+            if (path_steps) change_path(entity, path_steps);
         }
 
-        path.progress += entity.speed;
+        if (path.path_steps[0]) {
+            const pos = path.path_steps[0];
+            const blocked_by_entity = entity_positions[pos[0]][pos[1]];
 
-        if (path.progress >= ticks_per_second) {
-            path.progress -= ticks_per_second;
-            const pos = path.path_steps.shift();
-            entity.x = pos[0];
-            entity.y = pos[1];
+            if (!blocked_by_entity || blocked_by_entity == entity) {
+                path.progress += entity.speed;
+
+                if (path.progress >= ticks_per_second) {
+                    path.progress -= ticks_per_second;
+                    path.path_steps.shift();
+
+                    entity_positions[entity.x][entity.y] = null;
+
+                    entity.x = pos[0];
+                    entity.y = pos[1];
+                    entity_positions[entity.x][entity.y] = entity;
+
+                }
+
+            } else {
+                //console.log('blocked by entity', blocked_by_entity.id, entity.id);
+                path.progress = 0;
+            }
+
         }
 
         if (entity.chasing_action_and_context) {
@@ -466,6 +535,12 @@ function tick() {
         }
     }
 
+    for (let i = 0; i < entities.length; i++) {
+        const entity = entities[i];
+        if (!entity) continue;
+        entity.attack_timer += 1;
+    }
+
     // Entity movement choice
     for (let i = 0; i < enemy_entities.length; i++) {
         const entity = enemy_entities[i];
@@ -479,11 +554,8 @@ function tick() {
             const closest_player_entity = player_entities[closest_player_index];
             const distance_to_closest_player = distance_to_players[closest_player_index];
             if (distance_to_closest_player < 10) {
-                const path = calculate_path_positions([entity.x, entity.y], [closest_player_entity.x, closest_player_entity.y]);
-                if (path != null) {
-                    change_path(entity, path);
-                    continue;
-                }
+
+                chase_entity(entity, closest_player_entity, melee_attack);
             }
         }
 
@@ -503,6 +575,7 @@ function tick() {
         entities[entity.entity_index] = undefined;
         if (entity.enemy_entity_index) enemy_entities[entity.enemy_entity_index] = undefined;
         if (entity.player_entity_index) player_entities[entity.player_entity_index] = undefined;
+        if (player_entity == entity) player_entity = undefined;
         entities_marked_for_delete.pop();
     }
 
@@ -521,7 +594,7 @@ function change_path(entity, path_steps, append = false) {
             existing_path.path_steps = path_steps;
             existing_path.path_length = path_steps.length;
             const same_first_step = !!path_steps[0] && !!path_steps[0][0] && first_step[0] == path_steps[0][0] && first_step[1] == path_steps[0][1];
-            if (!same_first_step) existing_path.progress = ticks_per_second;
+            if (!same_first_step) existing_path.progress = 0;
         } else {
             existing_path.path_steps = existing_path.path_steps.concat(path_steps);
             existing_path.path_length = existing_path.path_steps.length;
@@ -582,10 +655,47 @@ function calculate_path_positions(start, end) {
     return null;
 }
 
-// ---------------------------------------------------------------------------------End updating ------------------------------------------------------------------------------
-// ----------------------------------------------------------------------------------- Actions --------------------------------------------------------------------------------
+/** @type {(source_entity: Entity, target_entity: Entity, action: Action)} */
+function chase_entity(source_entity, target_entity, action) {
+    if (!target_entity) return;
 
-const log_requirements = true;
+    source_entity.chasing_entity = target_entity;
+    source_entity.chasing_action_and_context = { action, context: { source_entity, target_entity } };
+
+    const path_steps = calculate_path_positions([source_entity.x, source_entity.y], [target_entity.x, target_entity.y]);
+    if (path_steps != null) {
+        change_path(source_entity, path_steps);
+    }
+}
+
+// -------------------------------------------------------------------------------- End updating ------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------- Requirements ------------------------------------------------------------------------------
+
+/** @type {Requirement} */
+const in_melee_range_requirement = (context) => {
+    const in_range = get_distance(context) <= 1.5;
+    if (log_requirements) console.log('in_melee_range', in_range);
+    return in_range;
+}
+
+/** @type {Requirement} */
+const not_self_requirement = (context) => {
+    const not_self = context.source_entity != context.target_entity;
+    if (log_requirements) console.log('not_self', not_self);
+    return not_self;
+}
+
+/** @type {Requirement} */
+const attack_timer_up_requirement = (context) => {
+    const attack_timer_up = context.source_entity.attack_timer >= ticks_per_second / context.source_entity.attack_speed;
+    if (log_requirements) console.log('attack_timer_up', attack_timer_up);
+    return attack_timer_up;
+}
+
+// ------------------------------------------------------------------------------ End Requirements -----------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------- Actions ----------------------------------------------------------------------------------
+
+const log_requirements = false;
 
 /** @type {(context: Context, action: Action)} */
 function take_action(context, action) {
@@ -605,29 +715,16 @@ function get_distance(context) {
     return Math.sqrt((context.source_entity.x - context.target_entity.x) * (context.source_entity.x - context.target_entity.x) + (context.source_entity.y - context.target_entity.y) * (context.source_entity.y - context.target_entity.y));
 }
 
-/** @type {Requirement} */
-const in_melee_range_requirement = (context) => {
-    const in_range = get_distance(context) <= 1.5;
-    console.log('in_melee_range', in_range);
-    return in_range;
-}
-
-/** @type {Requirement} */
-const not_self_requirement = (context) => {
-    const not_self = context.source_entity != context.target_entity;
-    console.log('not_self', not_self);
-    return not_self;
-}
-
 /** @type {Action} */
 const melee_attack = {
-    requirements: [in_melee_range_requirement, not_self_requirement],
+    requirements: [in_melee_range_requirement, not_self_requirement, attack_timer_up_requirement],
     effect_functions: [(context) => {
         const combat_context = {
             ...context,
             damage: { amount: 5 }
         }
         damage_entity(combat_context);
+        context.source_entity.attack_timer = 0;
     }]
 }
 
