@@ -14,7 +14,7 @@ resizeCanvas();
 let tick_counter = 0;
 
 const ticks_per_second = 60;
-const world_area_size = 100;
+const world_area_size = 1000;
 let cell_size = 40;
 const cell_margin = 4;
 let id_counter = 0;
@@ -708,6 +708,10 @@ function calculate_path_positions(start, end) {
     const visited = new Set();
     const [rows, cols] = [area_board.length, area_board[0].length];
 
+    const x_boundaries = [start[0] - 50, start[0] + 50];
+    const y_boundaries = [start[1] - 50, start[1] + 50];
+   // console.log(x_boundaries, y_boundaries)
+
     function posToStr([x, y]) {
         return `${x},${y}`;
     }
@@ -724,9 +728,12 @@ function calculate_path_positions(start, end) {
             const [nx, ny] = [x + dx, y + dy];
             if (nx >= 0 && nx < cols && ny >= 0 && ny < rows && area_board[nx][ny] === 1) {
                 const key = posToStr([nx, ny]);
+                const in_boundaries = nx >= x_boundaries[0] && nx <= x_boundaries[1] && ny >= y_boundaries[0] && ny <= y_boundaries[1];
                 if (!visited.has(key)) {
                     visited.add(key);
-                    queue.push([...path, [nx, ny]]);
+                    if(in_boundaries) {
+                        queue.push([...path, [nx, ny]]);
+                    }
                 }
             }
         }
