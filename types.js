@@ -89,3 +89,15 @@ const Entity_Type = {
  * @callback On_Combat_Calback
  * @param {Combat_Context} combat_context
  */
+
+/**
+ * @typedef {Object} Scheduled_Callback
+ * @property {Array<Callback>} callbacks;
+ * @property {Array<Object>} contexts
+ * @property {number} tick_date
+ */
+
+/**
+ * @callback Callback
+ * @param {Object} context
+ */

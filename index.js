@@ -11,6 +11,8 @@ resizeCanvas();
 // ----------------------------------------------------------------------- End canvas -----------------------------------------------------------------------------------------------
 // ----------------------------------------------------------------------- Game state -----------------------------------------------------------------------------------------------
 
+let tick_counter = 0;
+
 const ticks_per_second = 60;
 const world_area_size = 100;
 let cell_size = 40;
@@ -50,7 +52,7 @@ const player = {
 }
 
 add_player(player);
-const player_entity = entities[player.entity_index];
+let player_entity = entities[player.entity_index];
 
 player_entity.on_kill.push((combat_context) => {
     console.log('HEAL', combat_context);
@@ -101,6 +103,9 @@ for (let i = 0; i < start_entites.length; i++) {
 
 // ----------------------------------------------------------------------- End init state -------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------- Game logic ---------------------------------------------------------------------------------------------
+
+/** @type {Array<Scheduled_Callback>} */
+const scheduled_callbacks = [];
 
 /** @type {(entity: Entity) => Entity} */
 function add_entity(entity) {
@@ -227,8 +232,12 @@ function draw() {
     ctx.strokeStyle = 'gray';
     ctx.translate(translation[0], translation[1]);
     // Draw cells
-    for (let i = 0; i < world_area_size; i++) {
-        for (let j = 0; j < world_area_size; j++) {
+    const left_most_cell = Math.max(0,Math.floor((camera_origin[0] * zoom - canvas.width / 2) / cell_size));
+    const right_most_cell = Math.min(world_area_size,Math.floor((camera_origin[0] * zoom + canvas.width / 2) / cell_size + 1));
+    const up_most_cell = Math.max(0,Math.floor((camera_origin[1] * zoom - canvas.height / 2) / cell_size));
+    const down_most_cell = Math.min(world_area_size,Math.floor((camera_origin[1] * zoom + canvas.height / 2) / cell_size + 1));
+    for (let i = left_most_cell; i < right_most_cell; i++) {
+        for (let j = up_most_cell; j < down_most_cell; j++) {
             if (area_board[i][j] === 1) {
                 ctx.fillRect(i * cell_size, j * cell_size, cell_size, cell_size);
                 ctx.strokeRect(i * cell_size, j * cell_size, cell_size, cell_size);
@@ -257,7 +266,7 @@ function draw() {
     // Draw paths
     for (let i = 0; i < paths.length; i++) {
         const path = paths[i];
-        if(player_entity.path != path) continue;
+        if (player_entity.path != path) continue;
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.strokeStyle = 'green';
@@ -333,7 +342,16 @@ const keys_pressed = {
     s: false,
     d: false,
     shift: false,
+    space: false,
+    left_mouse_button: false,
+    right_mouse_button: false,
 }
+
+const keys_typed = {
+    left_mouse_button: false,
+    right_mouse_button: false
+}
+
 const camera_speed = 10;
 
 window.addEventListener('keydown', (event) => {
@@ -354,6 +372,11 @@ window.addEventListener('keydown', (event) => {
         case 'shift':
             keys_pressed.shift = true;
             break;
+        case ' ':
+            keys_pressed.space = true;
+            break;
+        default:
+            console.log('Key pressed:', key);
     }
 });
 
@@ -375,6 +398,9 @@ window.addEventListener('keyup', (event) => {
         case 'shift':
             keys_pressed.shift = false;
             break;
+        case ' ':
+            keys_pressed.space = false;
+            break;
     }
 });
 
@@ -394,61 +420,94 @@ function updateCamera() {
 }
 
 let player_path = null;
+const zoom = cell_size / 40.0;
+
+function handle_inputs() {
+    if(keys_pressed.space) {
+        camera_origin[0] = (player_entity?.x * cell_size + cell_size /2);
+        camera_origin[1] = (player_entity?.y * cell_size + cell_size /2);
+    }
+    if (keys_typed.left_mouse_button) {
+        keys_typed.left_mouse_button = false;
+
+        const translation = [-camera_origin[0] * zoom + (canvas.width / 2), -camera_origin[1] * zoom + canvas.height / 2];
+        clicked_cell = [
+            Math.floor((mouse_position[0] - translation[0]) / cell_size),
+            Math.floor((mouse_position[1] - translation[1]) / cell_size)
+        ]
+
+        player_entity.chasing_entity = undefined;
+        player_entity.chasing_action_and_context = undefined;
+
+        if (keys_pressed.shift && player_path) {
+            const existing_path = player_path;
+            const last_step = existing_path.path_steps[existing_path.path_steps.length - 1];
+            const path_steps = calculate_path_positions([last_step[0], last_step[1]], clicked_cell);
+
+            if (path_steps != null) {
+                change_path(player_entity, path_steps, true);
+            }
+        } else {
+            const path_steps = calculate_path_positions([player_entity.x, player_entity.y], clicked_cell);
+            //console.log('path', path);
+
+            if (path_steps != null) {
+                change_path(player_entity, path_steps);
+            }
+        }
+
+    }
+    right_mouse_button: if (keys_typed.right_mouse_button) {
+        keys_typed.right_mouse_button = false;
+
+        player_entity.chasing_entity = undefined;
+        player_entity.chasing_action_and_context = undefined;
+
+        const target_entity = hovered_entity;
+        if (!target_entity) break right_mouse_button;
+        const context = { target_entity, source_entity: player_entity }
+        //if (get_distance(context) >= 1.5) {
+        chase_entity(player_entity, target_entity, melee_attack);
+        //}
+        take_action(context, melee_attack);
+    }
+}
 
 window.addEventListener('mousedown', (event) => {
+    event.preventDefault();
     switch (event.button) {
+
         case 0: // Left mouse button
-
-            const zoom = cell_size / 40.0;
-            const translation = [-camera_origin[0] * zoom + (canvas.width / 2), -camera_origin[1] * zoom + canvas.height / 2];
-            clicked_cell = [
-                Math.floor((event.clientX - translation[0]) / cell_size),
-                Math.floor((event.clientY - translation[1]) / cell_size)
-            ]
-
-            player_entity.chasing_entity = undefined;
-            player_entity.chasing_action_and_context = undefined;
-
-            if (keys_pressed.shift && player_path) {
-                const existing_path = player_path;
-                const last_step = existing_path.path_steps[existing_path.path_steps.length - 1];
-                const path_steps = calculate_path_positions([last_step[0], last_step[1]], clicked_cell);
-
-                if (path_steps != null) {
-                    change_path(player_entity, path_steps, true);
-                }
-            } else {
-                const path_steps = calculate_path_positions([player_entity.x, player_entity.y], clicked_cell);
-                //console.log('path', path);
-
-                if (path_steps != null) {
-                    change_path(player_entity, path_steps);
-                }
-            }
-
+            keys_typed.left_mouse_button = true;
+            keys_pressed.left_mouse_button = true;
             break;
         case 1: // Middle mouse button (wheel)
             break;
         case 2: // Right mouse button
-            // Counteract ASYNC draw()
-            player_entity.chasing_entity = undefined;
-            player_entity.chasing_action_and_context = undefined;
-            event.preventDefault();
-            const hovered_entity_index = hovered_entity?.entity_index;
-            if (hovered_entity_index != undefined) {
-                const target_entity = entities[hovered_entity_index];
-                if(!target_entity) break;
-                const context = { target_entity, source_entity: player_entity }
-                //if (get_distance(context) >= 1.5) {
-                chase_entity(player_entity, target_entity, melee_attack);
-                //}
-                take_action(context, melee_attack);
-            }
+            keys_typed.right_mouse_button = true;
+            keys_pressed.right_mouse_button = true;
             break;
         default:
             console.log('Unknown mouse button:', event.button);
     }
 });
+
+window.addEventListener('mouseup', (event) => {
+    event.preventDefault();
+    switch (event.button) {
+        case 0: // Left mouse button            
+            keys_pressed.left_mouse_button = false;
+            break;
+        case 1: // Middle mouse button (wheel)
+            break;
+        case 2: // Right mouse button
+            keys_pressed.right_mouse_button = false;
+            break;
+        default:
+            console.log('Unknown mouse button:', event.button);
+    }
+});
+
 
 window.addEventListener('contextmenu', (event) => {
     event.preventDefault(); // verhindert das Kontextmenü
@@ -479,6 +538,24 @@ const entity_positions = Array.from({ length: world_area_size }, () => Array(wor
 
 
 function tick() {
+    handle_inputs();
+
+    // Process scheduled callbacks
+    for (let i = 0; i < scheduled_callbacks.length; i++) {
+        const scheduled_callback = scheduled_callbacks[i];
+        if(tick_counter != scheduled_callback.tick_date) continue;
+
+        for (let j = 0; j < scheduled_callback.callbacks; j++) {
+            const callback = scheduled_callback.callbacks[j];
+            const context = scheduled_callback.contexts.length - 1 >= j ? scheduled_callback.contexts[j] : scheduled_callback.contexts[0];
+
+            callback(context);
+        }
+
+        scheduled_callbacks.splice(i, 1);
+        i--;
+    }
+
     // Process paths
     for (let i = 0; i < paths.length; i++) {
         const path = paths[i];
@@ -489,12 +566,18 @@ function tick() {
             continue;
         }
 
-        if (entity.chasing_entity) {
+        let chasing_needs_pathing = true;
+        if (entity.chasing_action_and_context) {
+            const requirement_failed = take_action(entity.chasing_action_and_context.context, entity.chasing_action_and_context.action)
+            if (requirement_failed != in_melee_range_requirement) chasing_needs_pathing = false;
+        }
+
+        if (entity.chasing_entity && chasing_needs_pathing) {
             path_steps = calculate_path_positions([entity.x, entity.y], [entity.chasing_entity.x, entity.chasing_entity.y]);
             if (path_steps) change_path(entity, path_steps);
         }
 
-        if (path.path_steps[0]) {
+        if (path.path_steps[0] && chasing_needs_pathing) {
             const pos = path.path_steps[0];
             const blocked_by_entity = entity_positions[pos[0]][pos[1]];
 
@@ -518,10 +601,6 @@ function tick() {
                 path.progress = 0;
             }
 
-        }
-
-        if (entity.chasing_action_and_context) {
-            take_action(entity.chasing_action_and_context.context, entity.chasing_action_and_context.action)
         }
 
         if (path.path_steps.length === 0) {
@@ -579,6 +658,7 @@ function tick() {
         entities_marked_for_delete.pop();
     }
 
+    tick_counter++;
 }
 
 /** @type {(entity: Entity, path_steps: Array<Position>) } */
@@ -697,17 +777,21 @@ const attack_timer_up_requirement = (context) => {
 
 const log_requirements = false;
 
-/** @type {(context: Context, action: Action)} */
+/** 
+ * @returns Which requirement failed
+ * @type {(context: Context, action: Action) => Requirement} */
 function take_action(context, action) {
     if (action.requirements) {
         for (const requirement_callback of action.requirements) {
-            if (!requirement_callback(context)) return;
+            if (!requirement_callback(context)) return requirement_callback;
         }
     }
 
     for (const effect_function of action.effect_functions) {
         effect_function(context);
     }
+
+    return null;
 }
 
 /** @type {(context: Context) => number} */
