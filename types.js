@@ -37,6 +37,9 @@ const Entity_Type = {
  * @property {number} attack_timer - in ticks since last attack
  * @property {Entity_Stats} base_stats
  * @property {Entity_Stats} stats
+ * @property {number} visual_x
+ * @property {number} visual_y
+ * @property {Array<Equipment} equiped_items
  */
 
 /**
@@ -120,4 +123,30 @@ const Entity_Type = {
  * @property {number} x
  * @property {number} y
  * @property {number} peak_at
+ */
+
+/**
+ * @enum {string}
+ */
+const Equipment_Type = {
+    CHESTPLATE: 'CHESTPLATE',
+    HELMET: 'HELMET',
+    RING: 'RING',
+    BRACELET: 'BRACELET',
+    AMULET: 'AMULET'
+};
+
+/**
+ * @typedef {Object} Equipment
+ * @property {Entity_Stats} flat_stats
+ * @property {Entity_stats} multiplicative_stats
+ * @property {Array<Equipment_Effect>} extra_effects
+ * @property {Equipment_Type} type
+ */
+
+/**
+ * @typedef Equipment_Effect
+ * @property {Callback} effect_callback
+ * @property {Object} context
+ * @property {String} description
  */

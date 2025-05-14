@@ -56,15 +56,10 @@ let player_entity = entities[player.entity_index];
 
 player_entity.on_kill.push((combat_context) => {
     console.log('HEAL', combat_context);
-    combat_context.source_entity.stats.current_hp += combat_context.source_entity.stats.max_hp * 0.25;
-    visual_effects.push({
-        duration: ticks_per_second * 0.7,
-        x: player_entity.x,
-        y: player_entity.y,
-        image: heal_Image,
-        size: 2,
-        time: 0,
-        peak_at: 0.2
+    heal_entity({
+        source_entity: combat_context.target_entity,
+        target_entity: combat_context.source_entity,
+        damage: { amount: combat_context.source_entity.stats.max_hp * 0.25 }
     })
 })
 
@@ -119,6 +114,26 @@ for (let i = 0; i < start_entites.length; i++) {
 // ----------------------------------------------------------------------- End init state -------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------- Game logic ---------------------------------------------------------------------------------------------
 
+/** @type {(entity: Entity)} */
+function calculate_entity_stats(entity) {
+    entity.stats = { ...entity.base_stats }
+    if (!entity.equiped_items || entity.equiped_items.length == 0) return;
+    entity.equiped_items.forEach((equipment) => {
+        if (equipment.flat_stats)
+            Object.keys(equipment.flat_stats).forEach((key) => {
+                entity.stats[key] += equipment.flat_stats[key];
+            })
+        if (equipment.multiplicative_stats)
+            Object.keys(equipment.multiplicative_stats).forEach((key) => {
+                entity.stats[key] *= equipment.multiplicative_stats[key];
+            })
+        if (equipment.extra_effects)
+            equipment.extra_effects.forEach((extra_effect) => {
+                extra_effect.effect_callback({ ...extra_effect.context, entity });
+            })
+    });
+}
+
 /** @type {Array<Scheduled_Callback>} */
 const scheduled_callbacks = [];
 
@@ -139,11 +154,18 @@ function add_entity(entity) {
         enemy_entities.push(entity);
         entity.enemy_entity_index = enemy_entities.length - 1;
     }
+
+    calculate_entity_stats(entity);
     return entity;
 }
 
 /** @type {(player: Player) => Player} */
 function add_player(player) {
+    /** @type {Equipment} */
+    const amulet_equipment = {
+        flat_stats: { movement_speed: 3, max_hp: 200, current_hp: 200 },
+        multiplicative_stats: { movement_speed: 2 }
+    }
     /** @type {Entity} */
     const player_entity = {
         display_name: player.display_name,
@@ -160,6 +182,7 @@ function add_player(player) {
         on_death: [],
         on_scored_hit: [],
         on_taken_hit: [],
+        equiped_items: [amulet_equipment],
     }
     player.entity_index = add_entity(player_entity).entity_index;
     player.player_index = players.length;
@@ -175,19 +198,43 @@ function damage_entity(combat_context) {
     entity_on_scored_hit(combat_context);
 
     visual_effects.push({
-        duration: ticks_per_second * 0.5,
-        x: target_entity.x,
-        y: target_entity.y,
+        duration: ticks_per_second * 0.3,
+        entity: target_entity,
         image: damage_Image,
         peak_at: 0.2,
         size: 1.5,
         time: 0,
     })
+
     if (target_entity.stats.current_hp <= 0) {
         entity_on_kill(combat_context);
         entity_on_death(combat_context);
     }
     console.log('Damaged entity', target_entity);
+}
+
+/** @type {(combat_context: Combat_Context)} */
+function heal_entity(combat_context) {
+    const target_entity = combat_context.target_entity;
+    target_entity.stats.current_hp += combat_context.damage.amount;
+    if(target_entity.stats.current_hp > target_entity.stats.max_hp) target_entity.stats.current_hp = target_entity.stats.max_hp;
+    
+    entity_on_heal(combat_context);
+    
+}
+
+/** @type {(combat_context: Combat_Context)} */
+function entity_on_heal(combat_context) {
+    const target_entity = combat_context.target_entity;
+    const heal_percent = combat_context.damage.amount / target_entity.stats.max_hp;
+    visual_effects.push({
+        duration: ticks_per_second * 0.8,
+        entity: combat_context.target_entity,
+        image: heal_Image,
+        size: Math.max(1, 4 * heal_percent),
+        time: 0,
+        peak_at: 0.2
+    })
 }
 
 /** @type {(combat_context: Combat_Context)} */
@@ -255,6 +302,10 @@ const heal_Image = new Image();
 heal_Image.src = './heal_visual.png';
 const damage_Image = new Image();
 damage_Image.src = './damage_visual.png';
+const sword_image = new Image();
+sword_image.src = './sword.png';
+const bow_image = new Image();
+bow_image.src = './bow.png';
 
 ctx.imageSmoothingEnabled = false;
 
@@ -281,6 +332,23 @@ function draw() {
     ctx.fillStyle = 'white';
     ctx.strokeStyle = 'gray';
     ctx.translate(translation[0], translation[1]);
+
+
+    for (let i = 0; i < entities.length; i++) {
+        const entity = entities[i];
+        if (!entity) continue;
+
+        if (entity.path) {
+            entity.visual_x = entity.x * cell_size + cell_margin;
+            entity.visual_y = entity.y * cell_size + cell_margin;
+            const next_cell = entity.path.path_steps[0];
+            if (next_cell) {
+                entity.visual_x += cell_size * (next_cell[0] - entity.x) * entity.path.progress / ticks_per_second;
+                entity.visual_y += cell_size * (next_cell[1] - entity.y) * entity.path.progress / ticks_per_second;
+            }
+        }
+    }
+
     // Draw cells
     const left_most_cell = Math.max(0, Math.floor((camera_origin[0] * zoom - canvas.width / 2) / cell_size));
     const right_most_cell = Math.min(world_area_size, Math.floor((camera_origin[0] * zoom + canvas.width / 2) / cell_size + 1));
@@ -296,20 +364,20 @@ function draw() {
     }
 
     // Draw visual effects
-    for(let i = 0; i < visual_effects.length; i++){
+    for (let i = 0; i < visual_effects.length; i++) {
 
         const visual_effect = visual_effects[i];
-        if(visual_effect){
+        if (visual_effect) {
             const entity = visual_effect.entity;
             const resulting_width = cell_size * visual_effect.size;
             const resulting_height = cell_size * visual_effect.size;
-            const cell_middle = entity ? 
-            [entity.x * cell_size + cell_size / 2, entity.y * cell_size + cell_size / 2]
-            : [visual_effect.x * cell_size + cell_size / 2, visual_effect.y * cell_size + cell_size / 2]; 
+            const cell_middle = entity ?
+                [entity.visual_x + cell_size / 2, entity.visual_y + cell_size / 2]
+                : [visual_effect.x * cell_size + cell_size / 2, visual_effect.y * cell_size + cell_size / 2];
             const duration_percent = visual_effect.time / visual_effect.duration;
             const peak_at = visual_effect.peak_at;
             ctx.globalAlpha = (duration_percent > peak_at ? 1 - (duration_percent - peak_at) / (1 - peak_at)
-        : duration_percent / peak_at ) 
+                : duration_percent / peak_at)
             ctx.drawImage(visual_effect.image, cell_middle[0] - resulting_width / 2, cell_middle[1] - resulting_height / 2, resulting_width, resulting_height);
             ctx.globalAlpha = 1;
         }
@@ -338,7 +406,9 @@ function draw() {
         //ctx.strokeRect((entity.x + path_offset[0]) * cell_size + cell_margin, (entity.y + path_offset[1]) * cell_size + cell_margin, cell_size - cell_margin * 2, cell_size - cell_margin * 2);
         ctx.drawImage(playerImage, x, y, 32 * zoom, 32 * zoom);
         ctx.drawImage(chestplateImage, x, y, 32 * zoom, 32 * zoom);
-        ctx.drawImage(helmetImage, x, y - 32 * zoom, 32 * zoom, 32 * zoom);
+        ctx.drawImage(helmetImage, x, y - 32 * zoom + 1, 32 * zoom, 32 * zoom);
+        ctx.drawImage(sword_image, x - zoom * 0, y, 32 * zoom, 32 * zoom);
+        //ctx.drawImage(bow_image, x, y, 32 * zoom, 32 * zoom);
     }
 
     // Draw paths
@@ -381,24 +451,27 @@ function draw() {
             if (hovered_entity == entity) ctx.strokeStyle = 'orange';
             ctx.strokeRect((entity.x + path_offset[0]) * cell_size + cell_margin, (entity.y + path_offset[1]) * cell_size + cell_margin, cell_size - cell_margin * 2, cell_size - cell_margin * 2);
             ctx.fillStyle = "rgb(0,0,0,0.7)";
-        const damage_percent = 1 - Math.max(0, Math.min(1, entity.stats.current_hp / entity.stats.max_hp));
-        ctx.fillRect((entity.x + path_offset[0]) * cell_size + cell_margin, (entity.y + path_offset[1]) * cell_size + cell_margin, cell_size - cell_margin * 2, (cell_size - cell_margin * 2) * damage_percent);
+            const damage_percent = 1 - Math.max(0, Math.min(1, entity.stats.current_hp / entity.stats.max_hp));
+            ctx.fillRect((entity.x + path_offset[0]) * cell_size + cell_margin, (entity.y + path_offset[1]) * cell_size + cell_margin, cell_size - cell_margin * 2, (cell_size - cell_margin * 2) * damage_percent);
+            const attack_percent = Math.min(1, entity.stats.attack_speed * entity.attack_timer / ticks_per_second);
+            ctx.strokeStyle = 'yellow';
+            ctx.beginPath();
+            ctx.moveTo((entity.x + path_offset[0]) * cell_size + cell_margin,
+                (entity.y + path_offset[1] + 1) * cell_size - cell_margin);
+            ctx.lineTo((entity.x + path_offset[0]) * cell_size + cell_margin + (cell_size - cell_margin * 2) * attack_percent,
+                (entity.y + path_offset[1] + 1) * cell_size - cell_margin);
+            ctx.stroke();
         }
 
-
-
-        const attack_percent = Math.min(1, entity.stats.attack_speed * entity.attack_timer / ticks_per_second);
-        ctx.strokeStyle = 'yellow';
-        ctx.beginPath();
-        ctx.moveTo((entity.x + path_offset[0]) * cell_size + cell_margin,
-            (entity.y + path_offset[1] + 1) * cell_size - cell_margin);
-        ctx.lineTo((entity.x + path_offset[0]) * cell_size + cell_margin + (cell_size - cell_margin * 2) * attack_percent,
-            (entity.y + path_offset[1] + 1) * cell_size - cell_margin);
-        ctx.stroke();
     }
 
     if (time_since_entity_hovered >= 15) {
         hovered_entity = null;
+    }
+
+    if (hovered_cell) {
+        ctx.strokeStyle = 'orange';
+        ctx.strokeRect(hovered_cell[0] * cell_size, hovered_cell[1] * cell_size, cell_size, cell_size);
     }
 
     ctx.translate(-translation[0], -translation[1]);
@@ -424,8 +497,8 @@ function draw() {
 const hud_position = [
     canvas.width * 0.01,
     canvas.height - canvas.width * 0.01,
-    canvas.width * 0.2,
-    -canvas.height * 0.1
+    canvas.width * 0.20,
+    -canvas.width * 0.05
 ]
 
 
@@ -649,11 +722,11 @@ function tick() {
     handle_inputs();
 
     // Process visual effects
-    for(let i = 0; i < visual_effects.length; i++){
+    for (let i = 0; i < visual_effects.length; i++) {
         const visual_effect = visual_effects[i];
         visual_effect.time += 1;
-        if(visual_effect.time >= visual_effect.duration){
-            visual_effects.splice(i,1);
+        if (visual_effect.time >= visual_effect.duration) {
+            visual_effects.splice(i, 1);
         }
     }
 
@@ -715,6 +788,9 @@ function tick() {
 
             } else {
                 //console.log('blocked by entity', blocked_by_entity.id, entity.id);
+
+                if (entity.chasing_action_and_context && blocked_by_entity.entity_type != 'ENEMY')
+                    take_action({ ...entity.chasing_action_and_context.context, target_entity: blocked_by_entity }, entity.chasing_action_and_context.action);
                 path.progress = 0;
             }
 
@@ -865,6 +941,7 @@ function chase_entity(source_entity, target_entity, action) {
 
     source_entity.chasing_entity = target_entity;
     source_entity.chasing_action_and_context = { action, context: { source_entity, target_entity } };
+    console.log('chase_entity', source_entity.id, target_entity.id);
 
     const path_steps = calculate_path_positions([source_entity.x, source_entity.y], [target_entity.x, target_entity.y]);
     if (path_steps != null) {
