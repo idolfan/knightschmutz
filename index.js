@@ -14,9 +14,9 @@ resizeCanvas();
 let tick_counter = 0;
 
 const ticks_per_second = 60;
-const world_area_size = 1000;
+const world_area_size = 100;
 let cell_size = 40;
-const cell_margin = 4;
+let cell_margin = 4;
 let id_counter = 0;
 let area_board;
 /** @type {Array<Path>} */
@@ -56,7 +56,7 @@ let player_entity = entities[player.entity_index];
 
 player_entity.on_kill.push((combat_context) => {
     console.log('HEAL', combat_context);
-    combat_context.source_entity.hp += combat_context.source_entity.max_hp * 0.25;
+    combat_context.source_entity.stats.current_hp += combat_context.source_entity.stats.max_hp * 0.25;
 })
 
 /** @type {Array<Entity>} */
@@ -65,33 +65,39 @@ const start_entites = [
         display_name: "test",
         x: 40,
         y: 40,
-        speed: get_random_int(2, 8),
         path: null,
         entity_type: 'ENEMY',
-        max_hp: 10,
-        attack_speed: 1,
+        base_stats: {
+            attack_speed: 1,
+            max_hp: 10,
+            movement_speed: get_random_int(2, 8),
+        },
         attack_timer: ticks_per_second,
     },
     {
         display_name: "test2",
         x: 20,
         y: 20,
-        speed: get_random_int(2, 8),
         path: null,
         entity_type: 'ENEMY',
-        max_hp: 10,
-        attack_speed: 1,
+        base_stats: {
+            attack_speed: 1,
+            max_hp: 10,
+            movement_speed: get_random_int(2, 8),
+        },
         attack_timer: ticks_per_second,
     },
     {
         display_name: "test3",
         x: 30,
         y: 30,
-        speed: get_random_int(2, 8),
         path: null,
         entity_type: 'ENEMY',
-        max_hp: 10,
-        attack_speed: 1,
+        base_stats: {
+            attack_speed: 1,
+            max_hp: 10,
+            movement_speed: get_random_int(2, 8),
+        },
         attack_timer: ticks_per_second,
     }
 ]
@@ -110,7 +116,10 @@ const scheduled_callbacks = [];
 /** @type {(entity: Entity) => Entity} */
 function add_entity(entity) {
     entity.id = id_counter++;
-    if (entity.max_hp) entity.hp = entity.max_hp;
+
+    if (entity.base_stats?.max_hp) entity.base_stats.current_hp = entity.base_stats.max_hp;
+
+    if (entity.base_stats) entity.stats = { ...entity.base_stats };
 
     entities.push(entity);
     entity.entity_index = entities.length - 1;
@@ -131,10 +140,12 @@ function add_player(player) {
         display_name: player.display_name,
         x: 10,
         y: 10,
-        speed: 5,
         entity_type: 'PLAYER',
-        max_hp: 30,
-        attack_speed: 0.7,
+        base_stats: {
+            attack_speed: 0.7,
+            max_hp: 30,
+            movement_speed: 5,
+        },
         attack_timer: ticks_per_second,
         on_kill: [],
         on_death: [],
@@ -150,10 +161,10 @@ function add_player(player) {
 /** @type {(combat_context: Combat_Context)} */
 function damage_entity(combat_context) {
     const target_entity = combat_context.target_entity;
-    target_entity.hp -= combat_context.damage.amount;
+    target_entity.stats.current_hp -= combat_context.damage.amount;
     entity_on_taken_hit(combat_context);
     entity_on_scored_hit(combat_context);
-    if (target_entity.hp <= 0) {
+    if (target_entity.stats.current_hp <= 0) {
         entity_on_kill(combat_context);
         entity_on_death(combat_context);
     }
@@ -213,13 +224,25 @@ function entity_on_kill(combat_context) {
 // ------------------------------------------------------------------------ End game logic ------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------- Render ----------------------------------------------------------------------------------------------
 
+const playerImage = new Image();
+playerImage.src = './player.png';
+const chestplateImage = new Image();
+chestplateImage.src = './chestplate.png';
+const helmetImage = new Image();
+helmetImage.src = './helmet.png';
+const hp_hud_Image = new Image();
+hp_hud_Image.src = './hp_hud.png';
+
+ctx.imageSmoothingEnabled = false;
+
+let zoom = cell_size / 40.0;
+
 const camera_origin = [canvas.width / 2, canvas.height / 2];
 function draw() {
     updateCamera();
 
     time_since_entity_hovered += 1;
 
-    const zoom = cell_size / 40.0;
     const translation = [-camera_origin[0] * zoom + (canvas.width / 2), -camera_origin[1] * zoom + canvas.height / 2];
 
     const hovered_cell = [
@@ -232,10 +255,10 @@ function draw() {
     ctx.strokeStyle = 'gray';
     ctx.translate(translation[0], translation[1]);
     // Draw cells
-    const left_most_cell = Math.max(0,Math.floor((camera_origin[0] * zoom - canvas.width / 2) / cell_size));
-    const right_most_cell = Math.min(world_area_size,Math.floor((camera_origin[0] * zoom + canvas.width / 2) / cell_size + 1));
-    const up_most_cell = Math.max(0,Math.floor((camera_origin[1] * zoom - canvas.height / 2) / cell_size));
-    const down_most_cell = Math.min(world_area_size,Math.floor((camera_origin[1] * zoom + canvas.height / 2) / cell_size + 1));
+    const left_most_cell = Math.max(0, Math.floor((camera_origin[0] * zoom - canvas.width / 2) / cell_size));
+    const right_most_cell = Math.min(world_area_size, Math.floor((camera_origin[0] * zoom + canvas.width / 2) / cell_size + 1));
+    const up_most_cell = Math.max(0, Math.floor((camera_origin[1] * zoom - canvas.height / 2) / cell_size));
+    const down_most_cell = Math.min(world_area_size, Math.floor((camera_origin[1] * zoom + canvas.height / 2) / cell_size + 1));
     for (let i = left_most_cell; i < right_most_cell; i++) {
         for (let j = up_most_cell; j < down_most_cell; j++) {
             if (area_board[i][j] === 1) {
@@ -257,10 +280,17 @@ function draw() {
                 path_offset[1] = (next_cell[1] - entity.y) * entity.path.progress / ticks_per_second;
             }
         }
+        const x = (entity.x + path_offset[0]) * cell_size + cell_margin;
+        const y = (entity.y + path_offset[1]) * cell_size + cell_margin;
         ctx.fillStyle = 'blue';
-        ctx.fillRect((entity.x + path_offset[0]) * cell_size + cell_margin, (entity.y + path_offset[1]) * cell_size + cell_margin, cell_size - cell_margin * 2, cell_size - cell_margin * 2);
+
+
+        //ctx.fillRect((entity.x + path_offset[0]) * cell_size + cell_margin, (entity.y + path_offset[1]) * cell_size + cell_margin, cell_size - cell_margin * 2, cell_size - cell_margin * 2);
         ctx.strokeStyle = 'black';
-        ctx.strokeRect((entity.x + path_offset[0]) * cell_size + cell_margin, (entity.y + path_offset[1]) * cell_size + cell_margin, cell_size - cell_margin * 2, cell_size - cell_margin * 2);
+        //ctx.strokeRect((entity.x + path_offset[0]) * cell_size + cell_margin, (entity.y + path_offset[1]) * cell_size + cell_margin, cell_size - cell_margin * 2, cell_size - cell_margin * 2);
+        ctx.drawImage(playerImage, x, y, 32 * zoom, 32 * zoom);
+        ctx.drawImage(chestplateImage, x, y, 32 * zoom, 32 * zoom);
+        ctx.drawImage(helmetImage, x, y - 32 * zoom, 32 * zoom, 32 * zoom);
     }
 
     // Draw paths
@@ -302,13 +332,14 @@ function draw() {
             ctx.strokeStyle = 'black';
             if (hovered_entity == entity) ctx.strokeStyle = 'orange';
             ctx.strokeRect((entity.x + path_offset[0]) * cell_size + cell_margin, (entity.y + path_offset[1]) * cell_size + cell_margin, cell_size - cell_margin * 2, cell_size - cell_margin * 2);
+            ctx.fillStyle = "rgb(0,0,0,0.7)";
+        const damage_percent = 1 - Math.max(0, Math.min(1, entity.stats.current_hp / entity.stats.max_hp));
+        ctx.fillRect((entity.x + path_offset[0]) * cell_size + cell_margin, (entity.y + path_offset[1]) * cell_size + cell_margin, cell_size - cell_margin * 2, (cell_size - cell_margin * 2) * damage_percent);
         }
 
-        ctx.fillStyle = "rgb(0,0,0,0.7)";
-        const damage_percent = 1 - Math.max(0, Math.min(1, entity.hp / entity.max_hp));
-        ctx.fillRect((entity.x + path_offset[0]) * cell_size + cell_margin, (entity.y + path_offset[1]) * cell_size + cell_margin, cell_size - cell_margin * 2, (cell_size - cell_margin * 2) * damage_percent);
 
-        const attack_percent = Math.min(1, entity.attack_speed * entity.attack_timer / ticks_per_second);
+
+        const attack_percent = Math.min(1, entity.stats.attack_speed * entity.attack_timer / ticks_per_second);
         ctx.strokeStyle = 'yellow';
         ctx.beginPath();
         ctx.moveTo((entity.x + path_offset[0]) * cell_size + cell_margin,
@@ -323,7 +354,33 @@ function draw() {
     }
 
     ctx.translate(-translation[0], -translation[1]);
+
+    // HUD
+    const hp_percent = player_entity ? Math.max(0, player_entity.stats.current_hp / player_entity.stats.max_hp) : 0;
+    ctx.fillStyle = 'gray';
+    ctx.fillRect(hud_position[0], hud_position[1], hud_position[2], hud_position[3]);
+    ctx.fillStyle = 'red';
+    const hp_hud_thickness = hud_position[2] / 16;
+    ctx.fillRect(hud_position[0] + hp_hud_thickness, hud_position[1], (hud_position[2] - hp_hud_thickness * 2) * hp_percent, hud_position[3]);
+    ctx.drawImage(hp_hud_Image, hud_position[0], hud_position[1], hud_position[2], hud_position[3]);
+
+    if (player_entity) {
+        ctx.font = '20px "Press Start 2P"';
+        ctx.fillStyle = '#00FF00';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(`${player_entity.stats.current_hp.toFixed(0)} / ${player_entity.stats.max_hp.toFixed(0)}`, hud_position[0] + hud_position[2] / 2, hud_position[1] + hud_position[3] / 2);
+    }
 }
+
+const hud_position = [
+    canvas.width * 0.01,
+    canvas.height - canvas.width * 0.01,
+    canvas.width * 0.2,
+    -canvas.height * 0.1
+]
+
+
 
 function render() {
     draw();
@@ -420,12 +477,11 @@ function updateCamera() {
 }
 
 let player_path = null;
-const zoom = cell_size / 40.0;
 
 function handle_inputs() {
-    if(keys_pressed.space) {
-        camera_origin[0] = (player_entity?.x * cell_size + cell_size /2);
-        camera_origin[1] = (player_entity?.y * cell_size + cell_size /2);
+    if (keys_pressed.space) {
+        camera_origin[0] = (player_entity?.x * cell_size + cell_size / 2) / zoom;
+        camera_origin[1] = (player_entity?.y * cell_size + cell_size / 2) / zoom;
     }
     if (keys_typed.left_mouse_button) {
         keys_typed.left_mouse_button = false;
@@ -516,8 +572,12 @@ window.addEventListener('contextmenu', (event) => {
 window.addEventListener("wheel", (event) => {
     if (event.deltaY < 0 && cell_size < 320) {
         cell_size *= 2;
+        cell_margin *= 2;
+        zoom = cell_size / 40.0;
     } else if (event.deltaY > 0 && cell_size > 5) {
         cell_size /= 2;
+        cell_margin /= 2;
+        zoom = cell_size / 40.0;
     }
 
 });
@@ -543,7 +603,7 @@ function tick() {
     // Process scheduled callbacks
     for (let i = 0; i < scheduled_callbacks.length; i++) {
         const scheduled_callback = scheduled_callbacks[i];
-        if(tick_counter != scheduled_callback.tick_date) continue;
+        if (tick_counter != scheduled_callback.tick_date) continue;
 
         for (let j = 0; j < scheduled_callback.callbacks; j++) {
             const callback = scheduled_callback.callbacks[j];
@@ -582,7 +642,7 @@ function tick() {
             const blocked_by_entity = entity_positions[pos[0]][pos[1]];
 
             if (!blocked_by_entity || blocked_by_entity == entity) {
-                path.progress += entity.speed;
+                path.progress += entity.stats.movement_speed;
 
                 if (path.progress >= ticks_per_second) {
                     path.progress -= ticks_per_second;
@@ -710,7 +770,7 @@ function calculate_path_positions(start, end) {
 
     const x_boundaries = [start[0] - 50, start[0] + 50];
     const y_boundaries = [start[1] - 50, start[1] + 50];
-   // console.log(x_boundaries, y_boundaries)
+    // console.log(x_boundaries, y_boundaries)
 
     function posToStr([x, y]) {
         return `${x},${y}`;
@@ -731,7 +791,7 @@ function calculate_path_positions(start, end) {
                 const in_boundaries = nx >= x_boundaries[0] && nx <= x_boundaries[1] && ny >= y_boundaries[0] && ny <= y_boundaries[1];
                 if (!visited.has(key)) {
                     visited.add(key);
-                    if(in_boundaries) {
+                    if (in_boundaries) {
                         queue.push([...path, [nx, ny]]);
                     }
                 }
@@ -774,7 +834,7 @@ const not_self_requirement = (context) => {
 
 /** @type {Requirement} */
 const attack_timer_up_requirement = (context) => {
-    const attack_timer_up = context.source_entity.attack_timer >= ticks_per_second / context.source_entity.attack_speed;
+    const attack_timer_up = context.source_entity.attack_timer >= ticks_per_second / context.source_entity.stats.attack_speed;
     if (log_requirements) console.log('attack_timer_up', attack_timer_up);
     return attack_timer_up;
 }

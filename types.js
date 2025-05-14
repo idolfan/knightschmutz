@@ -21,10 +21,7 @@ const Entity_Type = {
  * @property {string} display_name - The name displayed for the entity.
  * @property {number} x - The x-coordinate of the entity's position.
  * @property {number} y - The y-coordinate of the entity's position.
- * @property {number} speed - The speed of the entity.
  * @property {Path} path - The path associated with the entity.
- * @property {number} max_hp
- * @property {number} hp - Health of the entity
  * @property {Array<On_Combat_Calback>} on_death - Functions called on death
  * @property {Array<On_Combat_Calback>} on_kill - Functions called on scored kill
  * @property {Array<On_Combat_Calback>} on_scored_hit - Functions called on scored hit
@@ -37,8 +34,19 @@ const Entity_Type = {
  * @property {Object} chasing_action_and_context - The action attempted to perform while chasing
  * @property {Action} chasing_action_and_context.action - The action
  * @property {Context} chasing_action_and_context.context - The context
- * @property {number} attack_speed - in seconds
  * @property {number} attack_timer - in ticks since last attack
+ * @property {Entity_Stats} base_stats
+ * @property {Entity_Stats} stats
+ */
+
+/**
+ * @typedef {Object} Entity_Stats
+ * @property {number} max_hp
+ * @property {number} current_hp
+ * @property {number} attack_speed
+ * @property {number} damage
+ * @property {number} movement_speed
+ * @property {number} armor
  */
 
 /**

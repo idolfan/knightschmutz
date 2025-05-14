@@ -1,3 +1,5 @@
 Fixes: -----------------------------------------
 Features: --------------------------------------
-- hud
+- Animations ( on damage, on actions)
+- Content ( spells, mana, Weapons )
+- Equipment system
