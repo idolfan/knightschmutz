@@ -57,6 +57,15 @@ let player_entity = entities[player.entity_index];
 player_entity.on_kill.push((combat_context) => {
     console.log('HEAL', combat_context);
     combat_context.source_entity.stats.current_hp += combat_context.source_entity.stats.max_hp * 0.25;
+    visual_effects.push({
+        duration: ticks_per_second * 0.7,
+        x: player_entity.x,
+        y: player_entity.y,
+        image: heal_Image,
+        size: 2,
+        time: 0,
+        peak_at: 0.2
+    })
 })
 
 /** @type {Array<Entity>} */
@@ -164,6 +173,16 @@ function damage_entity(combat_context) {
     target_entity.stats.current_hp -= combat_context.damage.amount;
     entity_on_taken_hit(combat_context);
     entity_on_scored_hit(combat_context);
+
+    visual_effects.push({
+        duration: ticks_per_second * 0.5,
+        x: target_entity.x,
+        y: target_entity.y,
+        image: damage_Image,
+        peak_at: 0.2,
+        size: 1.5,
+        time: 0,
+    })
     if (target_entity.stats.current_hp <= 0) {
         entity_on_kill(combat_context);
         entity_on_death(combat_context);
@@ -232,12 +251,20 @@ const helmetImage = new Image();
 helmetImage.src = './helmet.png';
 const hp_hud_Image = new Image();
 hp_hud_Image.src = './hp_hud.png';
+const heal_Image = new Image();
+heal_Image.src = './heal_visual.png';
+const damage_Image = new Image();
+damage_Image.src = './damage_visual.png';
 
 ctx.imageSmoothingEnabled = false;
 
 let zoom = cell_size / 40.0;
 
 const camera_origin = [canvas.width / 2, canvas.height / 2];
+
+/** @type {Array<Visual_Effect>} */
+const visual_effects = [];
+
 function draw() {
     updateCamera();
 
@@ -267,6 +294,27 @@ function draw() {
             }
         }
     }
+
+    // Draw visual effects
+    for(let i = 0; i < visual_effects.length; i++){
+
+        const visual_effect = visual_effects[i];
+        if(visual_effect){
+            const entity = visual_effect.entity;
+            const resulting_width = cell_size * visual_effect.size;
+            const resulting_height = cell_size * visual_effect.size;
+            const cell_middle = entity ? 
+            [entity.x * cell_size + cell_size / 2, entity.y * cell_size + cell_size / 2]
+            : [visual_effect.x * cell_size + cell_size / 2, visual_effect.y * cell_size + cell_size / 2]; 
+            const duration_percent = visual_effect.time / visual_effect.duration;
+            const peak_at = visual_effect.peak_at;
+            ctx.globalAlpha = (duration_percent > peak_at ? 1 - (duration_percent - peak_at) / (1 - peak_at)
+        : duration_percent / peak_at ) 
+            ctx.drawImage(visual_effect.image, cell_middle[0] - resulting_width / 2, cell_middle[1] - resulting_height / 2, resulting_width, resulting_height);
+            ctx.globalAlpha = 1;
+        }
+    }
+
     // Draw players
     ctx.lineWidth = 3;
     for (let i = 0; i < players.length; i++) {
@@ -599,6 +647,15 @@ const entity_positions = Array.from({ length: world_area_size }, () => Array(wor
 
 function tick() {
     handle_inputs();
+
+    // Process visual effects
+    for(let i = 0; i < visual_effects.length; i++){
+        const visual_effect = visual_effects[i];
+        visual_effect.time += 1;
+        if(visual_effect.time >= visual_effect.duration){
+            visual_effects.splice(i,1);
+        }
+    }
 
     // Process scheduled callbacks
     for (let i = 0; i < scheduled_callbacks.length; i++) {

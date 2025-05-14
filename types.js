@@ -109,3 +109,15 @@ const Entity_Type = {
  * @callback Callback
  * @param {Object} context
  */
+
+/**
+ * @typedef {Object} Visual_Effect
+ * @property {HTMLImageElement} image
+ * @property {number} size
+ * @property {number} duration
+ * @property {number} time
+ * @property {Entity} entity
+ * @property {number} x
+ * @property {number} y
+ * @property {number} peak_at
+ */
