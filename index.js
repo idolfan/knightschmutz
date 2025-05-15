@@ -11,12 +11,12 @@ resizeCanvas();
 // ----------------------------------------------------------------------- End canvas -----------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------- Images ----------------------------------------------------------------------------------------------- 
 
-const playerImage = new Image();
-playerImage.src = './images/player.png';
-const chestplateImage = new Image();
-chestplateImage.src = './images/chestplate.png';
-const helmetImage = new Image();
-helmetImage.src = './images/helmet.png';
+const player_image = new Image();
+player_image.src = './images/player.png';
+const chestplate_image = new Image();
+chestplate_image.src = './images/chestplate.png';
+const helmet_image = new Image();
+helmet_image.src = './images/helmet.png';
 const hp_hud_Image = new Image();
 hp_hud_Image.src = './images/hp_hud.png';
 const heal_Image = new Image();
@@ -33,20 +33,40 @@ const inventory_image = new Image();
 inventory_image.src = './images/inventory.png';
 const amulet_image = new Image();
 amulet_image.src = './images/amulet.png';
+const info_image = new Image();
+info_image.src = './images/info.png'
 
-// ------------------------------------------------------------------------- Images ----------------------------------------------------------------------------------------------- 
-// ----------------------------------------------------------------------- Game state -----------------------------------------------------------------------------------------------
+// ----------------------------------------------------------------------- End Images ---------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------ Constants ---------------------------------------------------------------------------------------------
 
-let tick_counter = 0;
+const Cell_Type = Object.freeze({
+    EMPTY: 0,
+    WALL: 1,
+    CHEST: 2
+});
+
+const Stat_Display_Names = Object.freeze({
+    movement_speed: "Movement Speed",
+    max_hp: "Health",
+    attack_speed: "Attack Speed",
+    damage: "Base Damage",
+    armor: "Armor",
+
+})
+
+// ---------------------------------------------------------------------- End Constants -------------------------------------------------------------------------------------------
+// ----------------------------------------------------------------------- Game state ---------------------------------------------------------------------------------------------
 
 const ticks_per_second = 60;
 const world_area_size = 100;
-let cell_size = 40;
-let cell_margin = 4;
+
 let id_counter = 0;
+let tick_counter = 0;
+
+/** @type {Array<Array<number>>} */
 let area_board;
-/** @type {Array<Path>} */
-const paths = [];
+/** @type {Array<Array<Entity>>} */
+const entity_positions = Array.from({ length: world_area_size }, () => Array(world_area_size).fill(null));
 
 /** @type {Array<Player>} */
 const players = [];
@@ -58,16 +78,13 @@ const player_entities = [];
 const enemy_entities = [];
 /** @type {Array<Entity} */
 const entities_marked_for_delete = [];
-/** @type {Entity} */
-let hovered_entity;
+
 /** @type {Map<string, Inventory} */
 const chest_inventories = new Map();
-
-const Cell_Type = Object.freeze({
-    EMPTY: 0,
-    WALL: 1,
-    CHEST: 2
-});
+/** @type {Array<Scheduled_Callback>} */
+const scheduled_callbacks = [];
+/** @type {Array<Path>} */
+const paths = [];
 
 /** @type {Inventory} */
 let opened_inventory;
@@ -75,8 +92,13 @@ let opened_inventory;
 /** @type {Inventory} */
 let opened_player_inventory;
 
+/** @type {Entity} */
+let hovered_entity;
+
+
 // ----------------------------------------------------------------------- End game state -------------------------------------------------------------------------------------------
 // -------------------------------------------------------------------------- Equipment ---------------------------------------------------------------------------------------------
+
 /** @type {Create_Equipment} */
 const test_amulet_equipment = (favour) => {
     return {
@@ -138,7 +160,6 @@ add_player(player);
 let player_entity = entities[player.entity_index];
 
 player_entity.on_kill.push((combat_context) => {
-    console.log('HEAL', combat_context);
     heal_entity({
         source_entity: combat_context.target_entity,
         target_entity: combat_context.source_entity,
@@ -159,7 +180,7 @@ for (let i = 0; i < start_entites.length; i++) {
 }
 
 // ----------------------------------------------------------------------- End init state -------------------------------------------------------------------------------------------
-// ------------------------------------------------------------------------- Game logic ---------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------- Entity Management ---------------------------------------------------------------------------------------------
 
 /** @type {(entity: Entity)} */
 function calculate_entity_stats(entity) {
@@ -180,9 +201,6 @@ function calculate_entity_stats(entity) {
             })
     });
 }
-
-/** @type {Array<Scheduled_Callback>} */
-const scheduled_callbacks = [];
 
 /** @type {(entity: Entity) => Entity} */
 function add_entity(entity) {
@@ -225,7 +243,7 @@ function add_player(player) {
         on_scored_hit: [],
         on_taken_hit: [],
         equiped_items: [test_amulet_equipment()],
-        inventory: { equipments: [] }
+        inventory: { equipments: [test_amulet_equipment()] }
     }
     player.entity_index = add_entity(player_entity).entity_index;
     player.player_index = players.length;
@@ -330,23 +348,12 @@ function entity_on_kill(combat_context) {
 }
 
 
-// ------------------------------------------------------------------------ End game logic ------------------------------------------------------------------------------------------
-// ---------------------------------------------------------------------------- Render ----------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------End Entity Management ------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------- Element Positions ----------------------------------------------------------------------------------------------
 
-ctx.imageSmoothingEnabled = false;
+// Player inventory
 
-let zoom = cell_size / 40.0;
-
-const camera_origin = [canvas.width / 2, canvas.height / 2];
-
-const other_inventory_image_dimensions = [
-    canvas.width / 2,
-    0,
-    canvas.height,
-    canvas.height,
-]
-
-/** @type {[x: number, y: number, width: number, height: number]} */
+/** @type {Dimensions} */
 const player_inventory_image_dimensions = [
     - canvas.height * 5 / 16,
     0,
@@ -354,14 +361,40 @@ const player_inventory_image_dimensions = [
     canvas.height,
 ]
 
-/** @type {[left: number, up: number, right: number, down: number]} */
+/** @type {Boundaries} */
 const player_inventory_boundaries = get_inventory_boundaries(player_inventory_image_dimensions);
 
+//
+// Other inventory
+
+/** @type {Dimensions} */
+const other_inventory_image_dimensions = [
+    canvas.width / 2,
+    0,
+    canvas.height,
+    canvas.height,
+]
+
+/** @type {Boundaries} */
 const other_inventory_boundaries = get_inventory_boundaries(other_inventory_image_dimensions);
 
-console.log('p o', player_inventory_boundaries, other_inventory_boundaries)
+//
+// Info inventory
 
-/** @type {(dimensions: [x: number, y: number, width: number, height: number]) => [left: number, up: number, right: number, down: number]} */
+/** @type {Dimensions} */
+const info_dimensions = [
+    canvas.height / 3,
+    0,
+    canvas.height,
+    canvas.height
+]
+
+/** @type {Boundaries} */
+const info_boundaries = get_inventory_boundaries(info_dimensions);
+
+
+
+/** @type {(dimensions: Dimensions) => Boundaries} */
 function get_inventory_boundaries(dimensions) {
     const x = dimensions[0];
     const y = dimensions[1];
@@ -375,26 +408,49 @@ function get_inventory_boundaries(dimensions) {
     ]
 }
 
+//
+// HUD
+
+const hud_position = [
+    canvas.width * 0.01,
+    canvas.height - canvas.width * 0.01,
+    canvas.width * 0.20,
+    -canvas.width * 0.05
+]
+
+// -------------------------------------------------------------------- End Element Positions ----------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------- Render ----------------------------------------------------------------------------------------------
+
+let cell_size = 40;
+let cell_margin = 4;
+let zoom = cell_size / 40.0;
+const camera_origin = [canvas.width / 2, canvas.height / 2];
+
 /** @type {Array<Visual_Effect>} */
 const visual_effects = [];
 
-function draw() {
-    updateCamera();
 
+ctx.imageSmoothingEnabled = false;
+
+
+
+function draw() {
+
+    updateCamera();
     time_since_entity_hovered += 1;
 
     const translation = [-camera_origin[0] * zoom + (canvas.width / 2), -camera_origin[1] * zoom + canvas.height / 2];
-
     const hovered_cell = [
         Math.floor((mouse_position[0] - translation[0]) / cell_size),
         Math.floor((mouse_position[1] - translation[1]) / cell_size)
     ]
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Clear
     ctx.fillStyle = 'rgb(200, 200, 220, 1)';
     ctx.strokeStyle = 'gray';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+    // Grid
     ctx.beginPath();
     for (let i = - (camera_origin[0] * zoom - canvas.width / 2) % cell_size; i < canvas.width; i += cell_size) {
         ctx.moveTo(i, 0);
@@ -405,19 +461,20 @@ function draw() {
         ctx.moveTo(0, i);
         ctx.lineTo(canvas.width, i);
     }
-
     ctx.stroke();
+
 
     ctx.translate(translation[0], translation[1]);
 
-
+    // Calculate entity visual positions with path progress for this frame
     for (let i = 0; i < entities.length; i++) {
         const entity = entities[i];
         if (!entity) continue;
 
+        entity.visual_x = entity.x * cell_size + cell_margin;
+        entity.visual_y = entity.y * cell_size + cell_margin;
+
         if (entity.path) {
-            entity.visual_x = entity.x * cell_size + cell_margin;
-            entity.visual_y = entity.y * cell_size + cell_margin;
             const next_cell = entity.path.path_steps[0];
             if (next_cell) {
                 entity.visual_x += cell_size * (next_cell[0] - entity.x) * entity.path.progress / ticks_per_second;
@@ -431,8 +488,7 @@ function draw() {
     const right_most_cell = Math.min(world_area_size - 1, Math.floor((camera_origin[0] * zoom + canvas.width / 2) / cell_size + 1));
     const up_most_cell = Math.max(0, Math.floor((camera_origin[1] * zoom - canvas.height / 2) / cell_size));
     const down_most_cell = Math.min(world_area_size - 1, Math.floor((camera_origin[1] * zoom + canvas.height / 2) / cell_size + 1));
-    ctx.fillStyle = 'black';
-    ctx.strokeStyle = 'black';
+
     for (let i = right_most_cell; i >= left_most_cell; i--) {
         for (let j = up_most_cell; j < down_most_cell; j++) {
             if (area_board[i][j] === 1) {
@@ -452,53 +508,44 @@ function draw() {
         const visual_effect = visual_effects[i];
         if (visual_effect) {
             const entity = visual_effect.entity;
+
             const resulting_width = cell_size * visual_effect.size;
             const resulting_height = cell_size * visual_effect.size;
+
             const cell_middle = entity ?
                 [entity.visual_x + cell_size / 2, entity.visual_y + cell_size / 2]
                 : [visual_effect.x * cell_size + cell_size / 2, visual_effect.y * cell_size + cell_size / 2];
+
             const duration_percent = visual_effect.time / visual_effect.duration;
             const peak_at = visual_effect.peak_at;
+
             ctx.globalAlpha = (duration_percent > peak_at ? 1 - (duration_percent - peak_at) / (1 - peak_at)
                 : duration_percent / peak_at)
+
             ctx.drawImage(visual_effect.image, cell_middle[0] - resulting_width / 2, cell_middle[1] - resulting_height / 2, resulting_width, resulting_height);
             ctx.globalAlpha = 1;
         }
     }
 
     // Draw players
-    ctx.lineWidth = 3;
     for (let i = 0; i < players.length; i++) {
         const player = players[i];
         const entity = entities[player.entity_index];
-        const path_offset = [0, 0];
-        if (entity.path?.path_steps) {
-            const next_cell = entity.path.path_steps[0];
-            if (next_cell) {
-                path_offset[0] = (next_cell[0] - entity.x) * entity.path.progress / ticks_per_second;
-                path_offset[1] = (next_cell[1] - entity.y) * entity.path.progress / ticks_per_second;
-            }
-        }
-        const x = (entity.x + path_offset[0]) * cell_size + cell_margin;
-        const y = (entity.y + path_offset[1]) * cell_size + cell_margin;
-        ctx.fillStyle = 'blue';
+        const x = entity.visual_x + cell_margin;
+        const y = entity.visual_y + cell_margin;
 
-
-        //ctx.fillRect((entity.x + path_offset[0]) * cell_size + cell_margin, (entity.y + path_offset[1]) * cell_size + cell_margin, cell_size - cell_margin * 2, cell_size - cell_margin * 2);
-        ctx.strokeStyle = 'black';
-        //ctx.strokeRect((entity.x + path_offset[0]) * cell_size + cell_margin, (entity.y + path_offset[1]) * cell_size + cell_margin, cell_size - cell_margin * 2, cell_size - cell_margin * 2);
-        ctx.drawImage(playerImage, x, y, 32 * zoom, 32 * zoom);
-        ctx.drawImage(chestplateImage, x, y, 32 * zoom, 32 * zoom);
-        ctx.drawImage(helmetImage, x, y - 32 * zoom + 1, 32 * zoom, 32 * zoom);
+        ctx.drawImage(player_image, x, y, 32 * zoom, 32 * zoom);
+        ctx.drawImage(chestplate_image, x, y, 32 * zoom, 32 * zoom);
+        ctx.drawImage(helmet_image, x, y - 32 * zoom + 1, 32 * zoom, 32 * zoom);
         ctx.drawImage(sword_image, x - zoom * 0, y, 32 * zoom, 32 * zoom);
         //ctx.drawImage(bow_image, x, y, 32 * zoom, 32 * zoom);
     }
 
     // Draw paths
+    ctx.lineWidth = 2;
     for (let i = 0; i < paths.length; i++) {
         const path = paths[i];
         if (player_entity.path != path) continue;
-        ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.strokeStyle = 'green';
         ctx.moveTo(path?.path_steps[0][0] * cell_size + cell_size / 2, path?.path_steps[0][1] * cell_size + cell_size / 2);
@@ -509,48 +556,51 @@ function draw() {
         ctx.stroke();
     }
 
+    const entity_on_hovered_cell = entity_positions[hovered_cell[0]][hovered_cell[1]];
+        if(entity_on_hovered_cell){
+            hovered_entity = entity_on_hovered_cell;
+            time_since_entity_hovered = 0;
+        }
+
     // Draw entities
     ctx.lineWidth = 3;
+
     for (let i = 0; i < entities.length; i++) {
         const entity = entities[i];
         if (!entity) continue;
-        const path_offset = [0, 0];
-        if (entity.path?.path_steps) {
-            const next_cell = entity.path.path_steps[0];
-            if (next_cell) {
-                path_offset[0] = (next_cell[0] - entity.x) * entity.path.progress / ticks_per_second;
-                path_offset[1] = (next_cell[1] - entity.y) * entity.path.progress / ticks_per_second;
-            }
-        }
-        if ((hovered_cell[0] == entity.x && hovered_cell[1] == entity.y)
-            || (hovered_cell[0] == Math.ceil(entity.x + path_offset[0]) && hovered_cell[1] == Math.ceil(entity.y + path_offset[1]))) {
-            time_since_entity_hovered = 0;
+        
+        if(entity.next_x && hovered_cell[0] == entity.x + Math.sign(entity.next_x - entity.x) && hovered_cell[1] == entity.y + Math.sign(entity.next_y - entity.y)){
             hovered_entity = entity;
+            time_since_entity_hovered = 0;
         }
+
         if (entity.entity_type != 'PLAYER') {
+            const entity_size = cell_size - cell_margin * 2;
+            const x = entity.visual_x + cell_margin;
+            const y = entity.visual_y + cell_margin;
+
             ctx.fillStyle = 'red';
-            ctx.fillRect((entity.x + path_offset[0]) * cell_size + cell_margin, (entity.y + path_offset[1]) * cell_size + cell_margin, cell_size - cell_margin * 2, cell_size - cell_margin * 2);
-            ctx.strokeStyle = 'black';
-            if (hovered_entity == entity) ctx.strokeStyle = 'orange';
-            ctx.strokeRect((entity.x + path_offset[0]) * cell_size + cell_margin, (entity.y + path_offset[1]) * cell_size + cell_margin, cell_size - cell_margin * 2, cell_size - cell_margin * 2);
-            ctx.fillStyle = "rgb(0,0,0,0.7)";
+            ctx.fillRect(x, y, entity_size, entity_size);
+
+            ctx.strokeStyle = hovered_entity == entity ? 'orange' : 'black';
+            ctx.strokeRect(x, y, entity_size, entity_size);
+
             const damage_percent = 1 - Math.max(0, Math.min(1, entity.stats.current_hp / entity.stats.max_hp));
-            ctx.fillRect((entity.x + path_offset[0]) * cell_size + cell_margin, (entity.y + path_offset[1]) * cell_size + cell_margin, cell_size - cell_margin * 2, (cell_size - cell_margin * 2) * damage_percent);
+            ctx.fillStyle = "rgb(0,0,0,0.7)";
+            ctx.fillRect(x, y, entity_size, (entity_size) * damage_percent);
+
             const attack_percent = Math.min(1, entity.stats.attack_speed * entity.attack_timer / ticks_per_second);
             ctx.strokeStyle = 'yellow';
             ctx.beginPath();
-            ctx.moveTo((entity.x + path_offset[0]) * cell_size + cell_margin,
-                (entity.y + path_offset[1] + 1) * cell_size - cell_margin);
-            ctx.lineTo((entity.x + path_offset[0]) * cell_size + cell_margin + (cell_size - cell_margin * 2) * attack_percent,
-                (entity.y + path_offset[1] + 1) * cell_size - cell_margin);
+            ctx.moveTo(x, entity.visual_y + cell_size - cell_margin);
+            ctx.lineTo(x + (entity_size) * attack_percent, entity.visual_y + cell_size - cell_margin);
             ctx.stroke();
         }
 
     }
 
-    if (time_since_entity_hovered >= 15) {
-        hovered_entity = null;
-    }
+
+    if (time_since_entity_hovered >= 15) hovered_entity = null;
 
     if (hovered_cell) {
         ctx.strokeStyle = 'orange';
@@ -580,19 +630,6 @@ function draw() {
     if (opened_inventory) {
         const dimensions = other_inventory_image_dimensions;
         ctx.drawImage(inventory_image, dimensions[0], dimensions[1], dimensions[2], dimensions[3]);
-
-        /* let equipment_index = 0;
-        for (let j = y + 1 / 16 * image_height; j < y + image_height - 1 / 16; j += element_size + image_width / 20) {
-            for (let i = x + image_width * 3 / 8; i < x + image_width * 15 / 16 - element_size; i += element_size + image_width / 20) {
-                const equipment = opened_inventory.equipments[equipment_index];
-                console.log('Draw equipment', equipment);
-                if (!equipment) break;
-
-                ctx.drawImage(equipment.image, i, j, element_size, element_size);
-                equipment_index++;
-            }
-        } */
-
     }
 
     if (opened_player_inventory) {
@@ -607,16 +644,64 @@ function draw() {
         ctx.drawImage(zone.equipment.image, zone.x, zone.y, zone.width, zone.height);
     }
 
+
+    // Equipment Info in Inventory
+    if (opened_inventory || opened_player_inventory) {
+        const dimensions = info_dimensions
+        ctx.drawImage(info_image, dimensions[0], dimensions[1], dimensions[2], dimensions[3]);
+
+
+        if (hovered_zone || dragged_zone) {
+
+            ctx.font = '20px "Press Start 2P"';
+            ctx.fillStyle = '#00FF00';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+
+            const equipment = hovered_zone?.equipment || dragged_zone?.equipment;
+            const keys = Object.keys(equipment.flat_stats);
+            const boundaries = info_boundaries;
+
+
+            const strings = {};
+
+            const flat_stat_keys = Object.keys(equipment.flat_stats);
+            flat_stat_keys.forEach((key) => {
+                const value = equipment.flat_stats[key];
+                if (!strings[key]) {
+                    strings[key] = "" + (Stat_Display_Names[key] || key) + ": "
+                }
+
+                strings[key] += value
+            })
+
+            const multiplicative_stat_keys = Object.keys(equipment.multiplicative_stats);
+            multiplicative_stat_keys.forEach((key) => {
+                const value = equipment.multiplicative_stats[key];
+                if (!strings[key]) {
+                    strings[key] = "" + (Stat_Display_Names[key] || key) + ": "
+                } else {
+                    strings[key] += " | "
+                }
+
+                strings[key] += (value * 100 - 100) + "%";
+            })
+
+            delete strings["current_hp"];
+
+            let line_height = boundaries[1];
+            const str_keys = Object.keys(strings);
+            for (let i = 0; i < str_keys.length; i++) {
+                const str = strings[str_keys[i]];
+                ctx.fillText(str, boundaries[0], line_height, boundaries[2] - boundaries[0]);
+                line_height += 30
+            }
+
+
+        }
+    }
+
 }
-
-const hud_position = [
-    canvas.width * 0.01,
-    canvas.height - canvas.width * 0.01,
-    canvas.width * 0.20,
-    -canvas.width * 0.05
-]
-
-
 
 function render() {
     draw();
@@ -874,7 +959,6 @@ function handle_inputs() {
     }
 
     if (keys_pressed.left_mouse_button) {
-        console.log('MEGATEST');
         if (dragged_zone) {
             dragged_zone.x = mouse_position[0] - dragged_zone.width / 2;
             dragged_zone.y = mouse_position[1] - dragged_zone.height / 2;
@@ -885,15 +969,14 @@ function handle_inputs() {
                 const zone = inventory_zones[i];
                 const mouse_inside = mouse_position[0] > zone.x && mouse_position[0] < zone.x + zone.width
                     && mouse_position[1] > zone.y && mouse_position[1] < zone.y + zone.height;
-                console.log('Checking inv', zone, mouse_position);
                 if (mouse_inside) {
-                    console.log('inside inv', zone, dragged_zone);
-                    if (zone.inventory != dragged_zone.inventory)
+                    if (zone.inventory != dragged_zone.inventory) {
                         transfer_equipment(dragged_zone.inventory, zone.inventory, dragged_zone.equipment);
-                    remove_item_zones(zone.inventory);
-                    remove_item_zones(dragged_zone.inventory);
-                    add_item_zones(zone.inventory);
-                    add_item_zones(dragged_zone.inventory);
+                        remove_item_zones(zone.inventory);
+                        remove_item_zones(dragged_zone.inventory);
+                        add_item_zones(zone.inventory);
+                        add_item_zones(dragged_zone.inventory);
+                    }
                     break;
                 }
             }
@@ -1020,10 +1103,8 @@ window.addEventListener("mousemove", (event) => {
 // ---------------------------------------------------------------------------------- Updating -----------------------------------------------------------------------------------
 
 
-render();
 
-/** @type {Array<Array<Entity>>} */
-const entity_positions = Array.from({ length: world_area_size }, () => Array(world_area_size).fill(null));
+render();
 
 
 function tick() {
@@ -1094,6 +1175,9 @@ function tick() {
 
         if (path.path_steps[0] && chasing_needs_pathing) {
             const pos = path.path_steps[0];
+            entity.next_x = pos[0];
+            entity.next_y = pos[1];
+
             const blocked_by_entity = entity_positions[pos[0]][pos[1]];
 
             if (!blocked_by_entity || blocked_by_entity == entity) {

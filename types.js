@@ -21,6 +21,8 @@ const Entity_Type = {
  * @property {string} display_name - The name displayed for the entity.
  * @property {number} x - The x-coordinate of the entity's position.
  * @property {number} y - The y-coordinate of the entity's position.
+ * @property {number} next_x
+ * @property {number} next_y
  * @property {Path} path - The path associated with the entity.
  * @property {Array<On_Combat_Calback>} on_death - Functions called on death
  * @property {Array<On_Combat_Calback>} on_kill - Functions called on scored kill
@@ -189,4 +191,12 @@ const Equipment_Type = {
  * @property {number} width
  * @property {number} height
  * @property {Inventory} inventory
+ */
+
+/** 
+ * @typedef {[left: number, up: number, right: number, down: number]} Boundaries
+ */
+
+/**
+ * @typedef {[x: number, y: number, width: number, height: number]} Dimensions
  */
