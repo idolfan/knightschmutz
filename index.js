@@ -12,27 +12,27 @@ resizeCanvas();
 // ------------------------------------------------------------------------- Images ----------------------------------------------------------------------------------------------- 
 
 const playerImage = new Image();
-playerImage.src = './player.png';
+playerImage.src = './images/player.png';
 const chestplateImage = new Image();
-chestplateImage.src = './chestplate.png';
+chestplateImage.src = './images/chestplate.png';
 const helmetImage = new Image();
-helmetImage.src = './helmet.png';
+helmetImage.src = './images/helmet.png';
 const hp_hud_Image = new Image();
-hp_hud_Image.src = './hp_hud.png';
+hp_hud_Image.src = './images/hp_hud.png';
 const heal_Image = new Image();
-heal_Image.src = './heal_visual.png';
+heal_Image.src = './images/heal_visual.png';
 const damage_Image = new Image();
-damage_Image.src = './damage_visual.png';
+damage_Image.src = './images/damage_visual.png';
 const sword_image = new Image();
-sword_image.src = './sword.png';
+sword_image.src = './images/sword.png';
 const bow_image = new Image();
-bow_image.src = './bow.png';
+bow_image.src = './images/bow.png';
 const chest_image = new Image();
-chest_image.src = './chest.png';
+chest_image.src = './images/chest.png';
 const inventory_image = new Image();
-inventory_image.src = './inventory.png';
+inventory_image.src = './images/inventory.png';
 const amulet_image = new Image();
-amulet_image.src = './amulet.png';
+amulet_image.src = './images/amulet.png';
 
 // ------------------------------------------------------------------------- Images ----------------------------------------------------------------------------------------------- 
 // ----------------------------------------------------------------------- Game state -----------------------------------------------------------------------------------------------
@@ -70,7 +70,10 @@ const Cell_Type = Object.freeze({
 });
 
 /** @type {Inventory} */
-let open_inventory;
+let opened_inventory;
+
+/** @type {Inventory} */
+let opened_player_inventory;
 
 // ----------------------------------------------------------------------- End game state -------------------------------------------------------------------------------------------
 // -------------------------------------------------------------------------- Equipment ---------------------------------------------------------------------------------------------
@@ -81,6 +84,7 @@ const test_amulet_equipment = (favour) => {
         multiplicative_stats: { movement_speed: 1 },
         type: "AMULET",
         image: amulet_image,
+        id: id_counter++,
     }
 }
 
@@ -116,7 +120,7 @@ for (let i = 0; i < world_area_size; i++) {
 
         if (area_board[i][j] == 2) {
             const equipments = [];
-            for(let i = 0; i < 20; i++){
+            for (let i = 0; i < 20; i++) {
                 equipments.push(test_amulet_equipment());
             }
             chest_inventories.set(i + ' ' + j, { equipments: equipments });
@@ -221,6 +225,7 @@ function add_player(player) {
         on_scored_hit: [],
         on_taken_hit: [],
         equiped_items: [test_amulet_equipment()],
+        inventory: { equipments: [] }
     }
     player.entity_index = add_entity(player_entity).entity_index;
     player.player_index = players.length;
@@ -333,6 +338,42 @@ ctx.imageSmoothingEnabled = false;
 let zoom = cell_size / 40.0;
 
 const camera_origin = [canvas.width / 2, canvas.height / 2];
+
+const other_inventory_image_dimensions = [
+    canvas.width / 2,
+    0,
+    canvas.height,
+    canvas.height,
+]
+
+/** @type {[x: number, y: number, width: number, height: number]} */
+const player_inventory_image_dimensions = [
+    - canvas.height * 5 / 16,
+    0,
+    canvas.height,
+    canvas.height,
+]
+
+/** @type {[left: number, up: number, right: number, down: number]} */
+const player_inventory_boundaries = get_inventory_boundaries(player_inventory_image_dimensions);
+
+const other_inventory_boundaries = get_inventory_boundaries(other_inventory_image_dimensions);
+
+console.log('p o', player_inventory_boundaries, other_inventory_boundaries)
+
+/** @type {(dimensions: [x: number, y: number, width: number, height: number]) => [left: number, up: number, right: number, down: number]} */
+function get_inventory_boundaries(dimensions) {
+    const x = dimensions[0];
+    const y = dimensions[1];
+    const width = dimensions[2];
+    const height = dimensions[3];
+    return [
+        x + width * 3 / 8,
+        y + 1 / 16 * height,
+        x + width * 15 / 16,
+        y + height - 1 / 16,
+    ]
+}
 
 /** @type {Array<Visual_Effect>} */
 const visual_effects = [];
@@ -536,25 +577,34 @@ function draw() {
     }
 
     // Inventory
-    if (open_inventory) {
-        const x = canvas.width / 2;
-        const y = 0;
-        const image_width = canvas.height;
-        const image_height = canvas.height;
-        const element_size = Math.floor(image_width/10);
-        ctx.drawImage(inventory_image, x, y, image_width, image_height);
-        //console.log('draw open_inventory', open_inventory);
-        let equipment_index = 0;
-        for(let j = y + 1 / 16 * image_height; j < y + image_height - 1 / 16; j += element_size + image_width/20) {
-        for(let i = x + image_width * 3 / 8; i < x + image_width * 15 / 16 - element_size; i += element_size + image_width/20){
-            const equipment = open_inventory.equipments[equipment_index];
-            console.log('Draw equipment', equipment);
-            if(!equipment) break;
+    if (opened_inventory) {
+        const dimensions = other_inventory_image_dimensions;
+        ctx.drawImage(inventory_image, dimensions[0], dimensions[1], dimensions[2], dimensions[3]);
 
-            ctx.drawImage(equipment.image, i, j, element_size, element_size);
-            equipment_index ++;
-        }
+        /* let equipment_index = 0;
+        for (let j = y + 1 / 16 * image_height; j < y + image_height - 1 / 16; j += element_size + image_width / 20) {
+            for (let i = x + image_width * 3 / 8; i < x + image_width * 15 / 16 - element_size; i += element_size + image_width / 20) {
+                const equipment = opened_inventory.equipments[equipment_index];
+                console.log('Draw equipment', equipment);
+                if (!equipment) break;
+
+                ctx.drawImage(equipment.image, i, j, element_size, element_size);
+                equipment_index++;
+            }
+        } */
+
     }
+
+    if (opened_player_inventory) {
+        const dimensions = player_inventory_image_dimensions;
+        ctx.drawImage(inventory_image, dimensions[0], dimensions[1], dimensions[2], dimensions[3]);
+    }
+
+    for (let i = 0; i < item_interaction_zones.length; i++) {
+        const zone = item_interaction_zones[i];
+        if (!zone) break;
+
+        ctx.drawImage(zone.equipment.image, zone.x, zone.y, zone.width, zone.height);
     }
 
 }
@@ -575,6 +625,21 @@ function render() {
 
 // ----------------------------------------------------------------------------- End render -------------------------------------------------------------------------------------
 // ----------------------------------------------------------------------------Input handling -----------------------------------------------------------------------------------
+
+/** @type {Array<Item_Interaction_Zone>} */
+const item_interaction_zones = [];
+
+/** @type {Item_Interaction_Zone} */
+let hovered_zone;
+
+/** @type {Item_Interaction_Zone} */
+let dragged_zone;
+
+/** @type {Array<number>} */
+const drag_start = [];
+
+/** @type {Array<Inventory_Zone} */
+const inventory_zones = [];
 
 const mouse_position = [0, 0];
 let time_since_entity_hovered = 0;
@@ -669,13 +734,116 @@ function updateCamera() {
 
 let player_path = null;
 
+/** @type {(inventory: Inventory, is_player: boolean)} */
+function open_inventory(inventory, is_player) {
+
+    if (is_player) opened_player_inventory = inventory;
+    else opened_inventory = inventory;
+
+    const image_dimensions = is_player ? player_inventory_image_dimensions : other_inventory_image_dimensions;
+    const inventory_boundaries = is_player ? player_inventory_boundaries : other_inventory_boundaries;
+    const element_size = Math.floor(image_dimensions[2] / 10);
+
+    inventory_zones.push({
+        x: inventory_boundaries[0], y: inventory_boundaries[1], width: inventory_boundaries[2] - inventory_boundaries[0],
+        height: inventory_boundaries[3] - inventory_boundaries[1],
+        inventory: inventory
+    });
+
+    let equipment_index = 0;
+    console.log('open_inventory', inventory);
+    console.log('inventory_boundaries', inventory_boundaries);
+    console.log('image_dimensions', image_dimensions);
+
+    add_item_zones(inventory);
+
+}
+
+/** @type {(inventory: Inventory)} */
+function remove_item_zones(inventory) {
+    inventory.equipments.forEach((equipment) => {
+        for (let i = 0; i < item_interaction_zones.length; i++) {
+            const zone = item_interaction_zones[i];
+            if (zone.equipment == equipment) {
+                item_interaction_zones.splice(i, 1);
+            }
+        }
+    });
+}
+
+/** @type {(inventory: Inventory)} */
+function add_item_zones(inventory) {
+
+    const is_player = inventory == opened_player_inventory;
+
+    const image_dimensions = is_player ? player_inventory_image_dimensions : other_inventory_image_dimensions;
+    const inventory_boundaries = is_player ? player_inventory_boundaries : other_inventory_boundaries;
+    const element_size = Math.floor(image_dimensions[2] / 10);
+
+    let equipment_index = 0;
+    for (let j = inventory_boundaries[1]; j < inventory_boundaries[3] - element_size; j += element_size + image_dimensions[2] / 20) {
+        for (let i = inventory_boundaries[0]; i < inventory_boundaries[2] - element_size; i += element_size + image_dimensions[2] / 20) {
+            const equipment = inventory.equipments[equipment_index];
+            if (!equipment) break;
+
+            item_interaction_zones.push({
+                x: i,
+                y: j,
+                width: element_size,
+                height: element_size,
+                equipment: equipment,
+                inventory: inventory,
+            })
+
+            equipment_index++;
+        }
+    }
+}
+
+/** @type {(inventory: Inventory)} */
+function close_inventory(inventory) {
+    if (!inventory) return;
+
+    if (dragged_zone) {
+        dragged_zone.x = drag_start[0];
+        dragged_zone.y = drag_start[1];
+        dragged_zone = null;
+    }
+
+    remove_item_zones(inventory);
+
+    for (let i = 0; i < inventory_zones.length; i++) {
+        const zone = inventory_zones[i];
+        if (zone.inventory == inventory) {
+            inventory_zones.splice(i, 1);
+        }
+    }
+
+    if (opened_player_inventory == inventory) {
+        opened_player_inventory = null;
+    }
+    if (opened_inventory == inventory) {
+        opened_inventory = null;
+    }
+
+}
+
 function handle_inputs() {
     if (keys_pressed.space) {
         camera_origin[0] = (player_entity?.x * cell_size + cell_size / 2) / zoom;
         camera_origin[1] = (player_entity?.y * cell_size + cell_size / 2) / zoom;
     }
-    if (keys_typed.left_mouse_button) {
+    left_mouse_button: if (keys_typed.left_mouse_button) {
         keys_typed.left_mouse_button = false;
+
+        if (opened_inventory || opened_player_inventory) {
+            if (hovered_zone) {
+                dragged_zone = hovered_zone;
+                drag_start[0] = hovered_zone.x;
+                drag_start[1] = hovered_zone.y;
+            }
+            break left_mouse_button;
+        }
 
         const translation = [-camera_origin[0] * zoom + (canvas.width / 2), -camera_origin[1] * zoom + canvas.height / 2];
         clicked_cell = [
@@ -704,6 +872,40 @@ function handle_inputs() {
         }
 
     }
+
+    if (keys_pressed.left_mouse_button) {
+        console.log('MEGATEST');
+        if (dragged_zone) {
+            dragged_zone.x = mouse_position[0] - dragged_zone.width / 2;
+            dragged_zone.y = mouse_position[1] - dragged_zone.height / 2;
+        }
+    } else if (!keys_pressed.left_mouse_button) {
+        if (dragged_zone) {
+            for (let i = 0; i < inventory_zones.length; i++) {
+                const zone = inventory_zones[i];
+                const mouse_inside = mouse_position[0] > zone.x && mouse_position[0] < zone.x + zone.width
+                    && mouse_position[1] > zone.y && mouse_position[1] < zone.y + zone.height;
+                console.log('Checking inv', zone, mouse_position);
+                if (mouse_inside) {
+                    console.log('inside inv', zone, dragged_zone);
+                    if (zone.inventory != dragged_zone.inventory)
+                        transfer_equipment(dragged_zone.inventory, zone.inventory, dragged_zone.equipment);
+                    remove_item_zones(zone.inventory);
+                    remove_item_zones(dragged_zone.inventory);
+                    add_item_zones(zone.inventory);
+                    add_item_zones(dragged_zone.inventory);
+                    break;
+                }
+            }
+            dragged_zone.x = drag_start[0];
+            dragged_zone.y = drag_start[1];
+            dragged_zone = null;
+            drag_start[0] = null;
+            drag_start[1] = null;
+        }
+    }
+
+
     right_mouse_button: if (keys_typed.right_mouse_button) {
         keys_typed.right_mouse_button = false;
 
@@ -723,8 +925,36 @@ function handle_inputs() {
         keys_typed.e = false;
 
         const cell = area_board[player_entity.x][player_entity.y];
-        if (open_inventory) open_inventory = null;
-        else if (cell == 2) open_inventory = chest_inventories.get(player_entity.x + " " + player_entity.y);
+        if (opened_inventory) {
+            close_inventory(opened_inventory);
+            close_inventory(opened_player_inventory);
+        } else if (cell == 2) {
+            opened_inventory = chest_inventories.get(player_entity.x + " " + player_entity.y);
+
+            if (!opened_player_inventory) open_inventory(player_entity.inventory, true);
+            open_inventory(opened_inventory, false);
+        } else if (opened_player_inventory) {
+            close_inventory(opened_player_inventory);
+        } else if (!opened_player_inventory) {
+            open_inventory(player_entity.inventory, true);
+        }
+
+
+    }
+}
+
+/** @type {(current_inventory: Inventory, new_inventory: Inventory, equipment: Equipment)} */
+function transfer_equipment(current_inventory, new_inventory, equipment) {
+    for (let i = 0; i < current_inventory.equipments.length; i++) {
+        const comparison_equipment = current_inventory.equipments[i];
+        if (comparison_equipment == equipment) {
+            current_inventory.equipments.splice(i, 1);
+            break;
+        }
+    }
+
+    if (new_inventory) {
+        new_inventory.equipments.push(equipment);
     }
 }
 
@@ -797,6 +1027,23 @@ const entity_positions = Array.from({ length: world_area_size }, () => Array(wor
 
 
 function tick() {
+
+    let found = false;
+    for (let i = 0; i < item_interaction_zones.length; i++) {
+        const zone = item_interaction_zones[i];
+        const mouse_inside = mouse_position[0] > zone.x && mouse_position[0] < zone.x + zone.width
+            && mouse_position[1] > zone.y && mouse_position[1] < zone.y + zone.height;
+
+        if (mouse_inside) {
+            //console.log('Mouse inside zone', zone, mouse_position);
+            hovered_zone = zone;
+            found = true;
+            break;
+        }
+    }
+
+    if (!found) hovered_zone = null;
+
     handle_inputs();
 
     // Process visual effects

@@ -156,6 +156,7 @@ const Equipment_Type = {
  * @property {Array<Equipment_Effect>} extra_effects
  * @property {Equipment_Type} type
  * @property {HTMLImageElement} image
+ * @property {number} id
  */
 
 /**
@@ -171,4 +172,21 @@ const Equipment_Type = {
  * @returns {Equipment}
  */
 
-/** @typedef {CallableFunction} */
+/**
+ * @typedef {Object} Item_Interaction_Zone
+ * @property {number} x
+ * @property {number} y
+ * @property {number} width
+ * @property {number} height
+ * @property {Equipment} equipment
+ * @property {Inventory} inventory
+ */
+
+/**
+ * @typedef {Object} Inventory_Zone
+ * @property {number} x
+ * @property {number} y
+ * @property {number} width
+ * @property {number} height
+ * @property {Inventory} inventory
+ */
