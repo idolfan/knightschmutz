@@ -9,6 +9,32 @@ window.addEventListener('resize', resizeCanvas, false);
 resizeCanvas();
 
 // ----------------------------------------------------------------------- End canvas -----------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------- Images ----------------------------------------------------------------------------------------------- 
+
+const playerImage = new Image();
+playerImage.src = './player.png';
+const chestplateImage = new Image();
+chestplateImage.src = './chestplate.png';
+const helmetImage = new Image();
+helmetImage.src = './helmet.png';
+const hp_hud_Image = new Image();
+hp_hud_Image.src = './hp_hud.png';
+const heal_Image = new Image();
+heal_Image.src = './heal_visual.png';
+const damage_Image = new Image();
+damage_Image.src = './damage_visual.png';
+const sword_image = new Image();
+sword_image.src = './sword.png';
+const bow_image = new Image();
+bow_image.src = './bow.png';
+const chest_image = new Image();
+chest_image.src = './chest.png';
+const inventory_image = new Image();
+inventory_image.src = './inventory.png';
+const amulet_image = new Image();
+amulet_image.src = './amulet.png';
+
+// ------------------------------------------------------------------------- Images ----------------------------------------------------------------------------------------------- 
 // ----------------------------------------------------------------------- Game state -----------------------------------------------------------------------------------------------
 
 let tick_counter = 0;
@@ -34,14 +60,67 @@ const enemy_entities = [];
 const entities_marked_for_delete = [];
 /** @type {Entity} */
 let hovered_entity;
+/** @type {Map<string, Inventory} */
+const chest_inventories = new Map();
+
+const Cell_Type = Object.freeze({
+    EMPTY: 0,
+    WALL: 1,
+    CHEST: 2
+});
+
+/** @type {Inventory} */
+let open_inventory;
 
 // ----------------------------------------------------------------------- End game state -------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------- Equipment ---------------------------------------------------------------------------------------------
+/** @type {Create_Equipment} */
+const test_amulet_equipment = (favour) => {
+    return {
+        flat_stats: { movement_speed: 3, max_hp: 20, current_hp: 20 },
+        multiplicative_stats: { movement_speed: 1 },
+        type: "AMULET",
+        image: amulet_image,
+    }
+}
+
+
+// ------------------------------------------------------------------------ End equipment -------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------- Entitiy definitions ----------------------------------------------------------------------------------------
+/** @type {Create_Entity} */
+const red_square_entity = (x, y) => {
+    return {
+        display_name: "Mean Red Square",
+        x: x,
+        y: y,
+        path: null,
+        entity_type: 'ENEMY',
+        base_stats: {
+            attack_speed: 1,
+            max_hp: 10,
+            movement_speed: get_random_int(2, 8),
+        },
+        attack_timer: ticks_per_second,
+    }
+}
+// ------------------------------------------------------------------- End Entity definitions ---------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------- Init state ---------------------------------------------------------------------------------------------
 
 area_board = Array.from({ length: world_area_size }, () => Array(world_area_size).fill(0));
 for (let i = 0; i < world_area_size; i++) {
     for (let j = 0; j < world_area_size; j++) {
-        area_board[i][j] = Math.random() < 0.66 ? 1 : 0;
+        const random = Math.random();
+        area_board[i][j] = random > 0.66 ? 1
+            : random > 0.003 ? 0
+                : 2;
+
+        if (area_board[i][j] == 2) {
+            const equipments = [];
+            for(let i = 0; i < 20; i++){
+                equipments.push(test_amulet_equipment());
+            }
+            chest_inventories.set(i + ' ' + j, { equipments: equipments });
+        }
     }
 }
 
@@ -65,45 +144,9 @@ player_entity.on_kill.push((combat_context) => {
 
 /** @type {Array<Entity>} */
 const start_entites = [
-    {
-        display_name: "test",
-        x: 40,
-        y: 40,
-        path: null,
-        entity_type: 'ENEMY',
-        base_stats: {
-            attack_speed: 1,
-            max_hp: 10,
-            movement_speed: get_random_int(2, 8),
-        },
-        attack_timer: ticks_per_second,
-    },
-    {
-        display_name: "test2",
-        x: 20,
-        y: 20,
-        path: null,
-        entity_type: 'ENEMY',
-        base_stats: {
-            attack_speed: 1,
-            max_hp: 10,
-            movement_speed: get_random_int(2, 8),
-        },
-        attack_timer: ticks_per_second,
-    },
-    {
-        display_name: "test3",
-        x: 30,
-        y: 30,
-        path: null,
-        entity_type: 'ENEMY',
-        base_stats: {
-            attack_speed: 1,
-            max_hp: 10,
-            movement_speed: get_random_int(2, 8),
-        },
-        attack_timer: ticks_per_second,
-    }
+    red_square_entity(20, 20),
+    red_square_entity(30, 30),
+    red_square_entity(40, 40)
 ]
 
 for (let i = 0; i < start_entites.length; i++) {
@@ -161,11 +204,6 @@ function add_entity(entity) {
 
 /** @type {(player: Player) => Player} */
 function add_player(player) {
-    /** @type {Equipment} */
-    const amulet_equipment = {
-        flat_stats: { movement_speed: 3, max_hp: 200, current_hp: 200 },
-        multiplicative_stats: { movement_speed: 2 }
-    }
     /** @type {Entity} */
     const player_entity = {
         display_name: player.display_name,
@@ -182,7 +220,7 @@ function add_player(player) {
         on_death: [],
         on_scored_hit: [],
         on_taken_hit: [],
-        equiped_items: [amulet_equipment],
+        equiped_items: [test_amulet_equipment()],
     }
     player.entity_index = add_entity(player_entity).entity_index;
     player.player_index = players.length;
@@ -217,10 +255,10 @@ function damage_entity(combat_context) {
 function heal_entity(combat_context) {
     const target_entity = combat_context.target_entity;
     target_entity.stats.current_hp += combat_context.damage.amount;
-    if(target_entity.stats.current_hp > target_entity.stats.max_hp) target_entity.stats.current_hp = target_entity.stats.max_hp;
-    
+    if (target_entity.stats.current_hp > target_entity.stats.max_hp) target_entity.stats.current_hp = target_entity.stats.max_hp;
+
     entity_on_heal(combat_context);
-    
+
 }
 
 /** @type {(combat_context: Combat_Context)} */
@@ -290,23 +328,6 @@ function entity_on_kill(combat_context) {
 // ------------------------------------------------------------------------ End game logic ------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------- Render ----------------------------------------------------------------------------------------------
 
-const playerImage = new Image();
-playerImage.src = './player.png';
-const chestplateImage = new Image();
-chestplateImage.src = './chestplate.png';
-const helmetImage = new Image();
-helmetImage.src = './helmet.png';
-const hp_hud_Image = new Image();
-hp_hud_Image.src = './hp_hud.png';
-const heal_Image = new Image();
-heal_Image.src = './heal_visual.png';
-const damage_Image = new Image();
-damage_Image.src = './damage_visual.png';
-const sword_image = new Image();
-sword_image.src = './sword.png';
-const bow_image = new Image();
-bow_image.src = './bow.png';
-
 ctx.imageSmoothingEnabled = false;
 
 let zoom = cell_size / 40.0;
@@ -329,8 +350,23 @@ function draw() {
     ]
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = 'white';
+    ctx.fillStyle = 'rgb(200, 200, 220, 1)';
     ctx.strokeStyle = 'gray';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.beginPath();
+    for (let i = - (camera_origin[0] * zoom - canvas.width / 2) % cell_size; i < canvas.width; i += cell_size) {
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i, canvas.height);
+    }
+
+    for (let i = - (camera_origin[1] * zoom - canvas.height / 2) % cell_size; i < canvas.height; i += cell_size) {
+        ctx.moveTo(0, i);
+        ctx.lineTo(canvas.width, i);
+    }
+
+    ctx.stroke();
+
     ctx.translate(translation[0], translation[1]);
 
 
@@ -351,14 +387,20 @@ function draw() {
 
     // Draw cells
     const left_most_cell = Math.max(0, Math.floor((camera_origin[0] * zoom - canvas.width / 2) / cell_size));
-    const right_most_cell = Math.min(world_area_size, Math.floor((camera_origin[0] * zoom + canvas.width / 2) / cell_size + 1));
+    const right_most_cell = Math.min(world_area_size - 1, Math.floor((camera_origin[0] * zoom + canvas.width / 2) / cell_size + 1));
     const up_most_cell = Math.max(0, Math.floor((camera_origin[1] * zoom - canvas.height / 2) / cell_size));
-    const down_most_cell = Math.min(world_area_size, Math.floor((camera_origin[1] * zoom + canvas.height / 2) / cell_size + 1));
-    for (let i = left_most_cell; i < right_most_cell; i++) {
+    const down_most_cell = Math.min(world_area_size - 1, Math.floor((camera_origin[1] * zoom + canvas.height / 2) / cell_size + 1));
+    ctx.fillStyle = 'black';
+    ctx.strokeStyle = 'black';
+    for (let i = right_most_cell; i >= left_most_cell; i--) {
         for (let j = up_most_cell; j < down_most_cell; j++) {
             if (area_board[i][j] === 1) {
-                ctx.fillRect(i * cell_size, j * cell_size, cell_size, cell_size);
-                ctx.strokeRect(i * cell_size, j * cell_size, cell_size, cell_size);
+                ctx.fillStyle = 'black';
+                ctx.fillRect(i * cell_size, j * cell_size + cell_size / 2, cell_size, 0.5 * cell_size);
+                ctx.fillStyle = 'rgb(64, 64, 64, 1)'
+                ctx.fillRect(i * cell_size, (j - 0.5) * cell_size, cell_size, cell_size * 1);
+            } else if (area_board[i][j] === 2) {
+                ctx.drawImage(chest_image, i * cell_size, j * cell_size, cell_size, cell_size);
             }
         }
     }
@@ -492,6 +534,29 @@ function draw() {
         ctx.textBaseline = 'middle';
         ctx.fillText(`${player_entity.stats.current_hp.toFixed(0)} / ${player_entity.stats.max_hp.toFixed(0)}`, hud_position[0] + hud_position[2] / 2, hud_position[1] + hud_position[3] / 2);
     }
+
+    // Inventory
+    if (open_inventory) {
+        const x = canvas.width / 2;
+        const y = 0;
+        const image_width = canvas.height;
+        const image_height = canvas.height;
+        const element_size = Math.floor(image_width/10);
+        ctx.drawImage(inventory_image, x, y, image_width, image_height);
+        //console.log('draw open_inventory', open_inventory);
+        let equipment_index = 0;
+        for(let j = y + 1 / 16 * image_height; j < y + image_height - 1 / 16; j += element_size + image_width/20) {
+        for(let i = x + image_width * 3 / 8; i < x + image_width * 15 / 16 - element_size; i += element_size + image_width/20){
+            const equipment = open_inventory.equipments[equipment_index];
+            console.log('Draw equipment', equipment);
+            if(!equipment) break;
+
+            ctx.drawImage(equipment.image, i, j, element_size, element_size);
+            equipment_index ++;
+        }
+    }
+    }
+
 }
 
 const hud_position = [
@@ -527,13 +592,15 @@ const keys_pressed = {
 
 const keys_typed = {
     left_mouse_button: false,
-    right_mouse_button: false
+    right_mouse_button: false,
+    e: false,
 }
 
 const camera_speed = 10;
 
 window.addEventListener('keydown', (event) => {
     const key = event.key;
+    console.log('key', key.toLowerCase());
     switch (key.toLowerCase()) {
         case 'w':
             keys_pressed.w = true;
@@ -552,6 +619,9 @@ window.addEventListener('keydown', (event) => {
             break;
         case ' ':
             keys_pressed.space = true;
+            break;
+        case 'e':
+            keys_typed.e = true;
             break;
         default:
             console.log('Key pressed:', key);
@@ -647,6 +717,14 @@ function handle_inputs() {
         chase_entity(player_entity, target_entity, melee_attack);
         //}
         take_action(context, melee_attack);
+    }
+
+    if (keys_typed.e) {
+        keys_typed.e = false;
+
+        const cell = area_board[player_entity.x][player_entity.y];
+        if (open_inventory) open_inventory = null;
+        else if (cell == 2) open_inventory = chest_inventories.get(player_entity.x + " " + player_entity.y);
     }
 }
 
@@ -919,7 +997,7 @@ function calculate_path_positions(start, end) {
 
         for (const [dx, dy] of [[0, 1], [1, 0], [0, -1], [-1, 0]]) {
             const [nx, ny] = [x + dx, y + dy];
-            if (nx >= 0 && nx < cols && ny >= 0 && ny < rows && area_board[nx][ny] === 1) {
+            if (nx >= 0 && nx < cols && ny >= 0 && ny < rows && (area_board[nx][ny] === 0 || area_board[nx][ny] === 2)) {
                 const key = posToStr([nx, ny]);
                 const in_boundaries = nx >= x_boundaries[0] && nx <= x_boundaries[1] && ny >= y_boundaries[0] && ny <= y_boundaries[1];
                 if (!visited.has(key)) {
@@ -941,7 +1019,7 @@ function chase_entity(source_entity, target_entity, action) {
 
     source_entity.chasing_entity = target_entity;
     source_entity.chasing_action_and_context = { action, context: { source_entity, target_entity } };
-    console.log('chase_entity', source_entity.id, target_entity.id);
+    // console.log('chase_entity', source_entity.id, target_entity.id);
 
     const path_steps = calculate_path_positions([source_entity.x, source_entity.y], [target_entity.x, target_entity.y]);
     if (path_steps != null) {

@@ -40,6 +40,7 @@ const Entity_Type = {
  * @property {number} visual_x
  * @property {number} visual_y
  * @property {Array<Equipment} equiped_items
+ * @property {Inventory} inventory
  */
 
 /**
@@ -53,12 +54,24 @@ const Entity_Type = {
  */
 
 /**
+ * @callback Create_Entity
+ * @param {number} x
+ * @param {number} y
+ * @returns {Entity}
+ */
+
+/**
  * @typedef {Object} Path
  * @property {number} id - The unique identifier for the path.
  * @property {number} entity_index - The unique identifier for the entity associated with the path.
  * @property {Array<Array>} path_steps - An array of positions representing the path.
  * @property {number} path_length - The length of the path.
  * @property {number} progress - The progress to the next point in the path.
+ */
+
+/** 
+ * @typedef {Object} Inventory
+ * @property {Array<Equipment>} equipments
  */
 
 /**
@@ -142,6 +155,7 @@ const Equipment_Type = {
  * @property {Entity_stats} multiplicative_stats
  * @property {Array<Equipment_Effect>} extra_effects
  * @property {Equipment_Type} type
+ * @property {HTMLImageElement} image
  */
 
 /**
@@ -150,3 +164,11 @@ const Equipment_Type = {
  * @property {Object} context
  * @property {String} description
  */
+
+/** 
+ * @callback Create_Equipment
+ * @param {number} favour
+ * @returns {Equipment}
+ */
+
+/** @typedef {CallableFunction} */
