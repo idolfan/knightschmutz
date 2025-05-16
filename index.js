@@ -86,6 +86,9 @@ const scheduled_callbacks = [];
 /** @type {Array<Path>} */
 const paths = [];
 
+let player_entity;
+let player_path = null;
+
 /** @type {Inventory} */
 let opened_inventory;
 
@@ -112,6 +115,118 @@ const test_amulet_equipment = (favour) => {
 
 
 // ------------------------------------------------------------------------ End equipment -------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------- Inventory Management -------------------------------------------------------------------------------------------
+
+/** @type {(current_inventory: Inventory, new_inventory: Inventory, equipment: Equipment)} */
+function transfer_equipment(current_inventory, new_inventory, equipment) {
+    for (let i = 0; i < current_inventory.equipments.length; i++) {
+        const comparison_equipment = current_inventory.equipments[i];
+        if (comparison_equipment == equipment) {
+            current_inventory.equipments.splice(i, 1);
+            break;
+        }
+    }
+
+    if (new_inventory) {
+        new_inventory.equipments.push(equipment);
+    }
+}
+
+/** @type {(inventory: Inventory, is_player: boolean)} */
+function open_inventory(inventory, is_player) {
+
+    if (is_player) opened_player_inventory = inventory;
+    else opened_inventory = inventory;
+
+    const image_dimensions = is_player ? player_inventory_image_dimensions : other_inventory_image_dimensions;
+    const inventory_boundaries = is_player ? player_inventory_boundaries : other_inventory_boundaries;
+    const element_size = Math.floor(image_dimensions[2] / 10);
+
+    inventory_zones.push({
+        x: inventory_boundaries[0], y: inventory_boundaries[1], width: inventory_boundaries[2] - inventory_boundaries[0],
+        height: inventory_boundaries[3] - inventory_boundaries[1],
+        inventory: inventory
+    });
+
+    let equipment_index = 0;
+    console.log('open_inventory', inventory);
+    console.log('inventory_boundaries', inventory_boundaries);
+    console.log('image_dimensions', image_dimensions);
+
+    add_item_zones(inventory);
+
+}
+
+/** @type {(inventory: Inventory)} */
+function remove_item_zones(inventory) {
+    inventory.equipments.forEach((equipment) => {
+        for (let i = 0; i < item_interaction_zones.length; i++) {
+            const zone = item_interaction_zones[i];
+            if (zone.equipment == equipment) {
+                item_interaction_zones.splice(i, 1);
+            }
+        }
+    });
+}
+
+/** @type {(inventory: Inventory)} */
+function add_item_zones(inventory) {
+
+    const is_player = inventory == opened_player_inventory;
+
+    const image_dimensions = is_player ? player_inventory_image_dimensions : other_inventory_image_dimensions;
+    const inventory_boundaries = is_player ? player_inventory_boundaries : other_inventory_boundaries;
+    const element_size = Math.floor(image_dimensions[2] / 10);
+
+    let equipment_index = 0;
+    for (let j = inventory_boundaries[1]; j < inventory_boundaries[3] - element_size; j += element_size + image_dimensions[2] / 20) {
+        for (let i = inventory_boundaries[0]; i < inventory_boundaries[2] - element_size; i += element_size + image_dimensions[2] / 20) {
+            const equipment = inventory.equipments[equipment_index];
+            if (!equipment) break;
+
+            item_interaction_zones.push({
+                x: i,
+                y: j,
+                width: element_size,
+                height: element_size,
+                equipment: equipment,
+                inventory: inventory,
+            })
+
+            equipment_index++;
+        }
+    }
+}
+
+/** @type {(inventory: Inventory)} */
+function close_inventory(inventory) {
+    if (!inventory) return;
+
+    if (dragged_zone) {
+        dragged_zone.x = drag_start[0];
+        dragged_zone.y = drag_start[1];
+        dragged_zone = null;
+    }
+
+    remove_item_zones(inventory);
+
+    for (let i = 0; i < inventory_zones.length; i++) {
+        const zone = inventory_zones[i];
+        if (zone.inventory == inventory) {
+            inventory_zones.splice(i, 1);
+        }
+    }
+
+    if (opened_player_inventory == inventory) {
+        opened_player_inventory = null;
+    }
+    if (opened_inventory == inventory) {
+        opened_inventory = null;
+    }
+
+}
+
+// ------------------------------------------------------------------ End Inventory Management -------------------------------------------------------------------------------------------
 // --------------------------------------------------------------------- Entitiy definitions ----------------------------------------------------------------------------------------
 /** @type {Create_Entity} */
 const red_square_entity = (x, y) => {
@@ -157,7 +272,7 @@ const player = {
 }
 
 add_player(player);
-let player_entity = entities[player.entity_index];
+player_entity = entities[player.entity_index];
 
 player_entity.on_kill.push((combat_context) => {
     heal_entity({
@@ -425,6 +540,7 @@ let cell_size = 40;
 let cell_margin = 4;
 let zoom = cell_size / 40.0;
 const camera_origin = [canvas.width / 2, canvas.height / 2];
+const camera_speed = 10;
 
 /** @type {Array<Visual_Effect>} */
 const visual_effects = [];
@@ -557,10 +673,10 @@ function draw() {
     }
 
     const entity_on_hovered_cell = entity_positions[hovered_cell[0]][hovered_cell[1]];
-        if(entity_on_hovered_cell){
-            hovered_entity = entity_on_hovered_cell;
-            time_since_entity_hovered = 0;
-        }
+    if (entity_on_hovered_cell) {
+        hovered_entity = entity_on_hovered_cell;
+        time_since_entity_hovered = 0;
+    }
 
     // Draw entities
     ctx.lineWidth = 3;
@@ -568,8 +684,10 @@ function draw() {
     for (let i = 0; i < entities.length; i++) {
         const entity = entities[i];
         if (!entity) continue;
-        
-        if(entity.next_x && hovered_cell[0] == entity.x + Math.sign(entity.next_x - entity.x) && hovered_cell[1] == entity.y + Math.sign(entity.next_y - entity.y)){
+
+        if (entity.next_x
+            && hovered_cell[0] == entity.x + Math.sign(entity.next_x - entity.x)
+            && hovered_cell[1] == entity.y + Math.sign(entity.next_y - entity.y)) {
             hovered_entity = entity;
             time_since_entity_hovered = 0;
         }
@@ -637,14 +755,6 @@ function draw() {
         ctx.drawImage(inventory_image, dimensions[0], dimensions[1], dimensions[2], dimensions[3]);
     }
 
-    for (let i = 0; i < item_interaction_zones.length; i++) {
-        const zone = item_interaction_zones[i];
-        if (!zone) break;
-
-        ctx.drawImage(zone.equipment.image, zone.x, zone.y, zone.width, zone.height);
-    }
-
-
     // Equipment Info in Inventory
     if (opened_inventory || opened_player_inventory) {
         const dimensions = info_dimensions
@@ -701,6 +811,14 @@ function draw() {
         }
     }
 
+    for (let i = 0; i < item_interaction_zones.length; i++) {
+        const zone = item_interaction_zones[i];
+        if (!zone) break;
+
+        ctx.drawImage(zone.equipment.image, zone.x, zone.y, zone.width, zone.height);
+    }
+
+
 }
 
 function render() {
@@ -710,6 +828,9 @@ function render() {
 
 // ----------------------------------------------------------------------------- End render -------------------------------------------------------------------------------------
 // ----------------------------------------------------------------------------Input handling -----------------------------------------------------------------------------------
+
+const mouse_position = [0, 0];
+let time_since_entity_hovered = 0;
 
 /** @type {Array<Item_Interaction_Zone>} */
 const item_interaction_zones = [];
@@ -725,9 +846,6 @@ const drag_start = [];
 
 /** @type {Array<Inventory_Zone} */
 const inventory_zones = [];
-
-const mouse_position = [0, 0];
-let time_since_entity_hovered = 0;
 
 const keys_pressed = {
     w: false,
@@ -746,62 +864,6 @@ const keys_typed = {
     e: false,
 }
 
-const camera_speed = 10;
-
-window.addEventListener('keydown', (event) => {
-    const key = event.key;
-    console.log('key', key.toLowerCase());
-    switch (key.toLowerCase()) {
-        case 'w':
-            keys_pressed.w = true;
-            break;
-        case 'a':
-            keys_pressed.a = true;
-            break;
-        case 's':
-            keys_pressed.s = true;
-            break;
-        case 'd':
-            keys_pressed.d = true;
-            break;
-        case 'shift':
-            keys_pressed.shift = true;
-            break;
-        case ' ':
-            keys_pressed.space = true;
-            break;
-        case 'e':
-            keys_typed.e = true;
-            break;
-        default:
-            console.log('Key pressed:', key);
-    }
-});
-
-window.addEventListener('keyup', (event) => {
-    const key = event.key;
-    switch (key.toLowerCase()) {
-        case 'w':
-            keys_pressed.w = false;
-            break;
-        case 'a':
-            keys_pressed.a = false;
-            break;
-        case 's':
-            keys_pressed.s = false;
-            break;
-        case 'd':
-            keys_pressed.d = false;
-            break;
-        case 'shift':
-            keys_pressed.shift = false;
-            break;
-        case ' ':
-            keys_pressed.space = false;
-            break;
-    }
-});
-
 function updateCamera() {
     if (keys_pressed.w) {
         camera_origin[1] -= camera_speed;
@@ -815,102 +877,6 @@ function updateCamera() {
     if (keys_pressed.d) {
         camera_origin[0] += camera_speed;
     }
-}
-
-let player_path = null;
-
-/** @type {(inventory: Inventory, is_player: boolean)} */
-function open_inventory(inventory, is_player) {
-
-    if (is_player) opened_player_inventory = inventory;
-    else opened_inventory = inventory;
-
-    const image_dimensions = is_player ? player_inventory_image_dimensions : other_inventory_image_dimensions;
-    const inventory_boundaries = is_player ? player_inventory_boundaries : other_inventory_boundaries;
-    const element_size = Math.floor(image_dimensions[2] / 10);
-
-    inventory_zones.push({
-        x: inventory_boundaries[0], y: inventory_boundaries[1], width: inventory_boundaries[2] - inventory_boundaries[0],
-        height: inventory_boundaries[3] - inventory_boundaries[1],
-        inventory: inventory
-    });
-
-    let equipment_index = 0;
-    console.log('open_inventory', inventory);
-    console.log('inventory_boundaries', inventory_boundaries);
-    console.log('image_dimensions', image_dimensions);
-
-    add_item_zones(inventory);
-
-}
-
-/** @type {(inventory: Inventory)} */
-function remove_item_zones(inventory) {
-    inventory.equipments.forEach((equipment) => {
-        for (let i = 0; i < item_interaction_zones.length; i++) {
-            const zone = item_interaction_zones[i];
-            if (zone.equipment == equipment) {
-                item_interaction_zones.splice(i, 1);
-            }
-        }
-    });
-}
-
-/** @type {(inventory: Inventory)} */
-function add_item_zones(inventory) {
-
-    const is_player = inventory == opened_player_inventory;
-
-    const image_dimensions = is_player ? player_inventory_image_dimensions : other_inventory_image_dimensions;
-    const inventory_boundaries = is_player ? player_inventory_boundaries : other_inventory_boundaries;
-    const element_size = Math.floor(image_dimensions[2] / 10);
-
-    let equipment_index = 0;
-    for (let j = inventory_boundaries[1]; j < inventory_boundaries[3] - element_size; j += element_size + image_dimensions[2] / 20) {
-        for (let i = inventory_boundaries[0]; i < inventory_boundaries[2] - element_size; i += element_size + image_dimensions[2] / 20) {
-            const equipment = inventory.equipments[equipment_index];
-            if (!equipment) break;
-
-            item_interaction_zones.push({
-                x: i,
-                y: j,
-                width: element_size,
-                height: element_size,
-                equipment: equipment,
-                inventory: inventory,
-            })
-
-            equipment_index++;
-        }
-    }
-}
-
-/** @type {(inventory: Inventory)} */
-function close_inventory(inventory) {
-    if (!inventory) return;
-
-    if (dragged_zone) {
-        dragged_zone.x = drag_start[0];
-        dragged_zone.y = drag_start[1];
-        dragged_zone = null;
-    }
-
-    remove_item_zones(inventory);
-
-    for (let i = 0; i < inventory_zones.length; i++) {
-        const zone = inventory_zones[i];
-        if (zone.inventory == inventory) {
-            inventory_zones.splice(i, 1);
-        }
-    }
-
-    if (opened_player_inventory == inventory) {
-        opened_player_inventory = null;
-    }
-    if (opened_inventory == inventory) {
-        opened_inventory = null;
-    }
-
 }
 
 function handle_inputs() {
@@ -1026,20 +992,61 @@ function handle_inputs() {
     }
 }
 
-/** @type {(current_inventory: Inventory, new_inventory: Inventory, equipment: Equipment)} */
-function transfer_equipment(current_inventory, new_inventory, equipment) {
-    for (let i = 0; i < current_inventory.equipments.length; i++) {
-        const comparison_equipment = current_inventory.equipments[i];
-        if (comparison_equipment == equipment) {
-            current_inventory.equipments.splice(i, 1);
+// ---------------------------------------------------------------------------- End input handling -------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------- Listeners ------------------------------------------------------------------------------------
+window.addEventListener('keydown', (event) => {
+    const key = event.key;
+    console.log('key', key.toLowerCase());
+    switch (key.toLowerCase()) {
+        case 'w':
+            keys_pressed.w = true;
             break;
-        }
+        case 'a':
+            keys_pressed.a = true;
+            break;
+        case 's':
+            keys_pressed.s = true;
+            break;
+        case 'd':
+            keys_pressed.d = true;
+            break;
+        case 'shift':
+            keys_pressed.shift = true;
+            break;
+        case ' ':
+            keys_pressed.space = true;
+            break;
+        case 'e':
+            keys_typed.e = true;
+            break;
+        default:
+            console.log('Key pressed:', key);
     }
+});
 
-    if (new_inventory) {
-        new_inventory.equipments.push(equipment);
+window.addEventListener('keyup', (event) => {
+    const key = event.key;
+    switch (key.toLowerCase()) {
+        case 'w':
+            keys_pressed.w = false;
+            break;
+        case 'a':
+            keys_pressed.a = false;
+            break;
+        case 's':
+            keys_pressed.s = false;
+            break;
+        case 'd':
+            keys_pressed.d = false;
+            break;
+        case 'shift':
+            keys_pressed.shift = false;
+            break;
+        case ' ':
+            keys_pressed.space = false;
+            break;
     }
-}
+});
 
 window.addEventListener('mousedown', (event) => {
     event.preventDefault();
@@ -1099,13 +1106,10 @@ window.addEventListener("mousemove", (event) => {
     mouse_position[1] = event.clientY;
 })
 
-// ---------------------------------------------------------------------------- End input handling -------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------- End Listeners -------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------- Updating -----------------------------------------------------------------------------------
 
-
-
 render();
-
 
 function tick() {
 
@@ -1216,6 +1220,7 @@ function tick() {
         }
     }
 
+    // Entity attack timer
     for (let i = 0; i < entities.length; i++) {
         const entity = entities[i];
         if (!entity) continue;
@@ -1249,10 +1254,11 @@ function tick() {
         }
     }
 
+    // Delete dead entities
     const delete_length = entities_marked_for_delete.length;
     for (let i = delete_length - 1; i >= 0; i--) {
         const entity = entities_marked_for_delete[i];
-        console.log('entity for delete', entity);
+        //console.log('entity for delete', entity);
         entities[entity.entity_index] = undefined;
         if (entity.enemy_entity_index) enemy_entities[entity.enemy_entity_index] = undefined;
         if (entity.player_entity_index) player_entities[entity.player_entity_index] = undefined;
