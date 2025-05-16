@@ -34,7 +34,11 @@ inventory_image.src = './images/inventory.png';
 const amulet_image = new Image();
 amulet_image.src = './images/amulet.png';
 const info_image = new Image();
-info_image.src = './images/info.png'
+info_image.src = './images/info.png';
+const slot_image = new Image();
+slot_image.src = './images/slot.png';
+const equipped_slots_image = new Image();
+equipped_slots_image.src = './images/equipped_slots.png';
 
 // ----------------------------------------------------------------------- End Images ---------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------ Constants ---------------------------------------------------------------------------------------------
@@ -86,7 +90,9 @@ const scheduled_callbacks = [];
 /** @type {Array<Path>} */
 const paths = [];
 
+/** @type {Entity} */
 let player_entity;
+/** @type {Path} */
 let player_path = null;
 
 /** @type {Inventory} */
@@ -94,6 +100,9 @@ let opened_inventory;
 
 /** @type {Inventory} */
 let opened_player_inventory;
+
+/** @type {Inventory} */
+let opened_equipped_inventory;
 
 /** @type {Entity} */
 let hovered_entity;
@@ -105,7 +114,7 @@ let hovered_entity;
 /** @type {Create_Equipment} */
 const test_amulet_equipment = (favour) => {
     return {
-        flat_stats: { movement_speed: 3, max_hp: 20, current_hp: 20 },
+        flat_stats: { movement_speed: 3, max_hp: 20 },
         multiplicative_stats: { movement_speed: 1 },
         type: "AMULET",
         image: amulet_image,
@@ -130,16 +139,15 @@ function transfer_equipment(current_inventory, new_inventory, equipment) {
     if (new_inventory) {
         new_inventory.equipments.push(equipment);
     }
+
+    if (current_inventory == opened_equipped_inventory || new_inventory == opened_equipped_inventory) {
+        calculate_entity_stats(player_entity);
+    }
 }
 
-/** @type {(inventory: Inventory, is_player: boolean)} */
-function open_inventory(inventory, is_player) {
+/** @type {(inventory: Inventory, is_player: boolean, image_dimensions: Dimensions, inventory_boundaries: Boundaries)} */
+function open_inventory(inventory, image_dimensions, inventory_boundaries) {
 
-    if (is_player) opened_player_inventory = inventory;
-    else opened_inventory = inventory;
-
-    const image_dimensions = is_player ? player_inventory_image_dimensions : other_inventory_image_dimensions;
-    const inventory_boundaries = is_player ? player_inventory_boundaries : other_inventory_boundaries;
     const element_size = Math.floor(image_dimensions[2] / 10);
 
     inventory_zones.push({
@@ -149,12 +157,27 @@ function open_inventory(inventory, is_player) {
     });
 
     let equipment_index = 0;
-    console.log('open_inventory', inventory);
-    console.log('inventory_boundaries', inventory_boundaries);
-    console.log('image_dimensions', image_dimensions);
 
-    add_item_zones(inventory);
+    add_item_zones(inventory, image_dimensions, inventory_boundaries);
 
+}
+
+/** @type {(inventory: Inventory)} */
+function open_player_inventory(inventory) {
+    opened_player_inventory = inventory;
+    open_inventory(inventory, player_inventory_image_dimensions, player_inventory_boundaries);
+}
+
+/** @type {(inventory: Inventory)} */
+function open_other_inventory(inventory) {
+    opened_inventory = inventory;
+    open_inventory(inventory, other_inventory_image_dimensions, other_inventory_boundaries);
+}
+
+/** @type {(inventory: Inventory)} */
+function open_equipped_inventory(inventory) {
+    opened_equipped_inventory = inventory;
+    open_inventory(inventory, equipped_dimensions, equipped_inventory_boundaries);
 }
 
 /** @type {(inventory: Inventory)} */
@@ -164,18 +187,30 @@ function remove_item_zones(inventory) {
             const zone = item_interaction_zones[i];
             if (zone.equipment == equipment) {
                 item_interaction_zones.splice(i, 1);
+                i--;
             }
         }
     });
 }
 
-/** @type {(inventory: Inventory)} */
-function add_item_zones(inventory) {
+/** @type {(inventory: Inventory, image_dimensions: Dimensions, inventory_boundaries: Boundaries)} */
+function add_item_zones(inventory, image_dimensions, inventory_boundaries) {
 
-    const is_player = inventory == opened_player_inventory;
+    if (!image_dimensions) {
+        if (opened_player_inventory == inventory) {
+            image_dimensions = player_inventory_image_dimensions;
+            inventory_boundaries = player_inventory_boundaries;
+        }
+        else if (opened_inventory == inventory) {
+            image_dimensions = other_inventory_image_dimensions;
+            inventory_boundaries = other_inventory_boundaries;
+        }
+        else if (opened_equipped_inventory == inventory) {
+            image_dimensions = equipped_dimensions;
+            inventory_boundaries = equipped_inventory_boundaries;
+        }
+    }
 
-    const image_dimensions = is_player ? player_inventory_image_dimensions : other_inventory_image_dimensions;
-    const inventory_boundaries = is_player ? player_inventory_boundaries : other_inventory_boundaries;
     const element_size = Math.floor(image_dimensions[2] / 10);
 
     let equipment_index = 0;
@@ -222,6 +257,10 @@ function close_inventory(inventory) {
     }
     if (opened_inventory == inventory) {
         opened_inventory = null;
+    }
+
+    if (opened_equipped_inventory == inventory) {
+        opened_equipped_inventory = null;
     }
 
 }
@@ -299,22 +338,27 @@ for (let i = 0; i < start_entites.length; i++) {
 
 /** @type {(entity: Entity)} */
 function calculate_entity_stats(entity) {
+
+    const hp_percent = entity?.stats?.current_hp / entity?.stats?.max_hp;
+
     entity.stats = { ...entity.base_stats }
-    if (!entity.equiped_items || entity.equiped_items.length == 0) return;
-    entity.equiped_items.forEach((equipment) => {
-        if (equipment.flat_stats)
-            Object.keys(equipment.flat_stats).forEach((key) => {
-                entity.stats[key] += equipment.flat_stats[key];
-            })
-        if (equipment.multiplicative_stats)
-            Object.keys(equipment.multiplicative_stats).forEach((key) => {
-                entity.stats[key] *= equipment.multiplicative_stats[key];
-            })
-        if (equipment.extra_effects)
-            equipment.extra_effects.forEach((extra_effect) => {
-                extra_effect.effect_callback({ ...extra_effect.context, entity });
-            })
-    });
+    if (entity.equipped_items?.equipments && entity.equipped_items?.equipments.length != 0)
+        entity.equipped_items.equipments.forEach((equipment) => {
+            if (equipment.flat_stats)
+                Object.keys(equipment.flat_stats).forEach((key) => {
+                    entity.stats[key] += equipment.flat_stats[key];
+                })
+            if (equipment.multiplicative_stats)
+                Object.keys(equipment.multiplicative_stats).forEach((key) => {
+                    entity.stats[key] *= equipment.multiplicative_stats[key];
+                })
+            if (equipment.extra_effects)
+                equipment.extra_effects.forEach((extra_effect) => {
+                    extra_effect.effect_callback({ ...extra_effect.context, entity });
+                })
+        });
+
+    entity.stats.current_hp = entity.stats.max_hp * hp_percent;
 }
 
 /** @type {(entity: Entity) => Entity} */
@@ -357,8 +401,8 @@ function add_player(player) {
         on_death: [],
         on_scored_hit: [],
         on_taken_hit: [],
-        equiped_items: [test_amulet_equipment()],
-        inventory: { equipments: [test_amulet_equipment()] }
+        equipped_items: { equipments: [test_amulet_equipment()] },
+        inventory: { equipments: [/* test_amulet_equipment() */] }
     }
     player.entity_index = add_entity(player_entity).entity_index;
     player.player_index = players.length;
@@ -386,7 +430,7 @@ function damage_entity(combat_context) {
         entity_on_kill(combat_context);
         entity_on_death(combat_context);
     }
-    console.log('Damaged entity', target_entity);
+    //console.log('Damaged entity', target_entity);
 }
 
 /** @type {(combat_context: Combat_Context)} */
@@ -507,7 +551,22 @@ const info_dimensions = [
 /** @type {Boundaries} */
 const info_boundaries = get_inventory_boundaries(info_dimensions);
 
+const equipped_dimensions = info_dimensions;
 
+const equipped_inventory_boundaries = get_equipped_inventory_boundaries(equipped_dimensions);
+
+function get_equipped_inventory_boundaries(dimensions) {
+    const x = dimensions[0];
+    const y = dimensions[1];
+    const width = dimensions[2];
+    const height = dimensions[3];
+    return [
+        x + width * 3 / 8,
+        y + 11 / 16 * height,
+        x + width * 15 / 16,
+        y + height - 1 / 16,
+    ]
+}
 
 /** @type {(dimensions: Dimensions) => Boundaries} */
 function get_inventory_boundaries(dimensions) {
@@ -746,19 +805,18 @@ function draw() {
 
     // Inventory
     if (opened_inventory) {
-        const dimensions = other_inventory_image_dimensions;
-        ctx.drawImage(inventory_image, dimensions[0], dimensions[1], dimensions[2], dimensions[3]);
+        draw_image_dimensions(inventory_image, other_inventory_image_dimensions);
     }
 
     if (opened_player_inventory) {
-        const dimensions = player_inventory_image_dimensions;
-        ctx.drawImage(inventory_image, dimensions[0], dimensions[1], dimensions[2], dimensions[3]);
+        draw_image_dimensions(inventory_image, player_inventory_image_dimensions);
+
+        draw_image_dimensions(equipped_slots_image, equipped_dimensions);
     }
 
     // Equipment Info in Inventory
     if (opened_inventory || opened_player_inventory) {
-        const dimensions = info_dimensions
-        ctx.drawImage(info_image, dimensions[0], dimensions[1], dimensions[2], dimensions[3]);
+        draw_image_dimensions(info_image, info_dimensions);
 
 
         if (hovered_zone || dragged_zone) {
@@ -824,6 +882,11 @@ function draw() {
 function render() {
     draw();
     requestAnimationFrame(render);
+}
+
+/** @type {(img: HTMLImageElement, dimensions: Dimensions)} */
+function draw_image_dimensions(img, dimensions) {
+    ctx.drawImage(img, dimensions[0], dimensions[1], dimensions[2], dimensions[3]);
 }
 
 // ----------------------------------------------------------------------------- End render -------------------------------------------------------------------------------------
@@ -931,6 +994,7 @@ function handle_inputs() {
         }
     } else if (!keys_pressed.left_mouse_button) {
         if (dragged_zone) {
+            let moved = false;
             for (let i = 0; i < inventory_zones.length; i++) {
                 const zone = inventory_zones[i];
                 const mouse_inside = mouse_position[0] > zone.x && mouse_position[0] < zone.x + zone.width
@@ -942,15 +1006,21 @@ function handle_inputs() {
                         remove_item_zones(dragged_zone.inventory);
                         add_item_zones(zone.inventory);
                         add_item_zones(dragged_zone.inventory);
+
+                        moved = true;
+                        break;
                     }
-                    break;
+
                 }
             }
-            dragged_zone.x = drag_start[0];
-            dragged_zone.y = drag_start[1];
+            if (!moved) {
+                dragged_zone.x = drag_start[0];
+                dragged_zone.y = drag_start[1];
+            }
             dragged_zone = null;
             drag_start[0] = null;
             drag_start[1] = null;
+
         }
     }
 
@@ -977,15 +1047,22 @@ function handle_inputs() {
         if (opened_inventory) {
             close_inventory(opened_inventory);
             close_inventory(opened_player_inventory);
+            close_inventory(opened_equipped_inventory);
         } else if (cell == 2) {
             opened_inventory = chest_inventories.get(player_entity.x + " " + player_entity.y);
 
-            if (!opened_player_inventory) open_inventory(player_entity.inventory, true);
-            open_inventory(opened_inventory, false);
+            open_other_inventory(opened_inventory);
+            if (!opened_player_inventory) open_player_inventory(player_entity.inventory);
+
+            if (!opened_equipped_inventory) {
+                open_equipped_inventory(player_entity.equipped_items);
+            }
         } else if (opened_player_inventory) {
             close_inventory(opened_player_inventory);
+            close_inventory(opened_equipped_inventory);
         } else if (!opened_player_inventory) {
-            open_inventory(player_entity.inventory, true);
+            open_player_inventory(player_entity.inventory);
+            open_equipped_inventory(player_entity.equipped_items);
         }
 
 
@@ -996,7 +1073,7 @@ function handle_inputs() {
 // -------------------------------------------------------------------------------- Listeners ------------------------------------------------------------------------------------
 window.addEventListener('keydown', (event) => {
     const key = event.key;
-    console.log('key', key.toLowerCase());
+   // console.log('key', key.toLowerCase());
     switch (key.toLowerCase()) {
         case 'w':
             keys_pressed.w = true;

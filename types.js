@@ -41,7 +41,7 @@ const Entity_Type = {
  * @property {Entity_Stats} stats
  * @property {number} visual_x
  * @property {number} visual_y
- * @property {Array<Equipment} equiped_items
+ * @property {Inventory} equipped_items
  * @property {Inventory} inventory
  */
 
