@@ -146,11 +146,12 @@ const Entity_Type = {
 /**
  * @typedef {Object} Equipment
  * @property {Entity_Stats} flat_stats
- * @property {Entity_stats} multiplicative_stats
+ * @property {Entity_Stats} multiplicative_stats
  * @property {Array<Equipment_Effect>} extra_effects
  * @property {Equipment_Type} type
  * @property {HTMLImageElement} image
  * @property {number} id
+ * @property {string} display_name
  */
 
 /**

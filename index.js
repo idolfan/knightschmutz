@@ -67,7 +67,9 @@ const Equipment_Type = {
     HELMET: 'HELMET',
     RING: 'RING',
     BRACELET: 'BRACELET',
-    AMULET: 'AMULET'
+    AMULET: 'AMULET',
+    MELEE_WEAPON: 'MELEE_WEAPON',
+    RANGED_WEAPON: 'RANGED_WEAPON',
 };
 
 /**
@@ -136,13 +138,85 @@ let inventory_zones = [];
 // -------------------------------------------------------------------------- Equipment ---------------------------------------------------------------------------------------------
 
 /** @type {Create_Equipment} */
-const test_amulet_equipment = (favour) => {
+const test_amulet_equipment = (favour = 0) => {
     return {
-        flat_stats: { movement_speed: 3, max_hp: 20 },
-        multiplicative_stats: { movement_speed: 1 },
-        type: "AMULET",
+        flat_stats: {
+            movement_speed: 3 + Math.trunc(favour / 5 + Math.random()),
+            max_hp: 20
+        },
+        multiplicative_stats: {
+            movement_speed: 1
+        },
+        type: Equipment_Type.AMULET,
         image: amulet_image,
         id: id_counter++,
+        display_name: "Golden Amulet",
+    }
+}
+
+/** @type {Create_Equipment} */
+const test_chestplate_equipment = (favour = 0) => {
+    return {
+        flat_stats: {
+            armor: 2,
+        },
+        multiplicative_stats: {
+            max_hp: 1.1 + 0.05 * Math.trunc(favour / 10 + Math.random())
+        },
+        type: Equipment_Type.CHESTPLATE,
+        image: chestplate_image,
+        id: id_counter++,
+        display_name: "Simple Chestplate",
+    }
+}
+
+/** @type {Create_Equipment} */
+const test_helmet_equipment = (favour = 0) => {
+    return {
+        flat_stats: {
+            armor: 1 + Math.trunc(favour / 5 + Math.random()),
+        },
+        multiplicative_stats: {
+            attack_speed: 1.1
+        },
+        type: Equipment_Type.HELMET,
+        image: helmet_image,
+        id: id_counter++,
+        display_name: "Simple Helmet",
+    }
+}
+
+/** @type {Create_Equipment} */
+const test_sword_equipment = (favour = 0) => {
+    return {
+        flat_stats: {
+            damage: 3
+        },
+        multiplicative_stats: {
+            attack_speed: 0.85 + 0.05 * Math.trunc(favour / 6 * Math.random()),
+            damage: 1.2,
+        },
+        type: Equipment_Type.MELEE_WEAPON,
+        image: sword_image,
+        id: id_counter++,
+        display_name: "Simple Sword",
+    }
+}
+
+/** @type {Create_Equipment} */
+const test_bow_equipment = (favour = 0) => {
+    return {
+        flat_stats: {
+            movement_speed: 1
+        },
+        multiplicative_stats: {
+            attack_speed: 1.3 + 0.05 * Math.trunc(favour / 6 * Math.random()),
+            damage: 0.9
+        },
+        type: Equipment_Type.RANGED_WEAPON,
+        image: bow_image,
+        id: id_counter++,
+        display_name: "Simple Bow",
     }
 }
 
@@ -189,8 +263,8 @@ function create_inventory_zone(inventory, image, boundaries, margins, slot_info)
 }
 
 /** @type {(image: HTMLImageElement, boundaries: Margins, margins: Margins) => Margins} */
-function calculate_zone_boundaries(image, boundaries, margins){
-    const b = [...boundaries];
+function calculate_zone_boundaries(image, boundaries, margins) {
+    const b = boundaries;
     let height = b[3] - b[1];
     let width = b[2] - b[0];
     if (b[3] == null || b[1] == null) height = image.height * (width / image.width);
@@ -280,6 +354,10 @@ function transfer_equipment(current_slot, new_slot, equipment) {
         new_inventory.equipments.push(equipment);
     }
 
+    if (new_slot_equipment) {
+        current_inventory.equipments.push(new_slot_equipment);
+    }
+
     new_slot.equipment = equipment;
     current_slot.equipment = new_slot_equipment;
 
@@ -340,6 +418,35 @@ const red_square_entity = (x, y) => {
 // ------------------------------------------------------------------- End Entity definitions ---------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------- Init state ---------------------------------------------------------------------------------------------
 
+const chest_loot_table = [
+    [test_amulet_equipment, 1],
+    [test_bow_equipment, 1],
+    [test_chestplate_equipment, 1],
+    [test_helmet_equipment, 1],
+    [test_sword_equipment, 1],
+]
+
+let table_sum = 0;
+chest_loot_table.forEach((entry) => {
+    table_sum += entry[1];
+})
+
+
+function roll_for_table(loot_table, table_sum) {
+    console.log('ROLL', table_sum, loot_table.length);
+    let increment = 0;
+    let result;
+    const rolled_number = Math.floor(Math.random() * table_sum);
+    for (let i = 0; i < loot_table.length; i++) {
+        const entry = loot_table[i];
+        increment += entry[1];
+        if (rolled_number < increment) {
+            console.log('rolled_number, inc', rolled_number, increment);
+            return entry[0];
+        };
+    }
+}
+
 area_board = Array.from({ length: world_area_size }, () => Array(world_area_size).fill(0));
 for (let i = 0; i < world_area_size; i++) {
     for (let j = 0; j < world_area_size; j++) {
@@ -350,11 +457,15 @@ for (let i = 0; i < world_area_size; i++) {
 
         if (area_board[i][j] == 2) {
             const equipments = [];
+            
+            const favour = (Math.floor((Math.random() - 0.2) * 12));
+
             for (let i = 0; i < 20; i++) {
-                equipments.push(test_amulet_equipment());
+                const equipment = roll_for_table(chest_loot_table, table_sum * 18);
+                if (equipment) equipments.push(equipment(favour));
             }
             /** @type {Inventory} */
-            const inventory = { equipments: equipments, slot_count: 20, type: Inventory_Type.OTHER };
+            const inventory = { equipments: equipments, slot_count: 30, type: Inventory_Type.OTHER };
             chest_inventories.set(i + ' ' + j, inventory);
         }
     }
@@ -394,10 +505,12 @@ for (let i = 0; i < start_entites.length; i++) {
 
 /** @type {(entity: Entity)} */
 function calculate_entity_stats(entity) {
-    if(!entity) {
+    if (!entity) {
         //console.log("No entity on calculate stats!");
         return;
     }
+
+    console.log('c e s', entity);
 
     const hp_percent = entity?.stats?.current_hp / entity?.stats?.max_hp;
 
@@ -464,14 +577,21 @@ function add_player(player) {
         on_taken_hit: [],
     }
 
+    const player_starting_equipment = [
+        test_amulet_equipment(),
+        test_chestplate_equipment(),
+        test_helmet_equipment(),
+        test_sword_equipment(),
+    ]
+
     const equipped_inventory = {
-        equipments: [test_amulet_equipment()],
+        equipments: player_starting_equipment,
         slot_count: 8,
         type: Inventory_Type.EQUIPPED,
         entity: player_entity,
     };
     const inventory = {
-        equipments: [/* test_amulet_equipment() */],
+        equipments: [test_bow_equipment()],
         slot_count: 10,
         type: Inventory_Type.PLAYER,
     };
@@ -592,19 +712,20 @@ const hud_position = [
     -canvas.width * 0.05
 ]
 
-const inventory_margins = [1 / 11, 1 / 16, 1 / 11, 1 / 16];
+const inventory_margins = [1 / 11, 1 / 13, 1 / 11, 1 / 13];
 
 /** @type {Slot_Info} */
 const default_slot_info = {
     image: slot_image,
     zone_margin: [5 / 32, 5 / 32, 5 / 32, 5 / 32],
-    width: canvas.height / 12,
-    height: canvas.height / 12,
+    width: canvas.height / 11,
+    height: canvas.height / 11,
     slot_distances: [10, 10]
 }
 
-const info_boundaries = [canvas.width / 3, 0, canvas.width / 3 + canvas.height * 84 / 128, canvas.height * 84 / 128];
-const info_margins = [8 / 88, 8 / 84, 8 / 88, 8 / 84];
+const inv_width_percent = 0.348;
+const info_boundaries = [(0.5 - inv_width_percent / 2) * canvas.width, 0, (0.5 + inv_width_percent / 2) * canvas.width, null];
+const info_margins = [1 / 11, 1 / 13, 1 / 11, 1 / 13];
 let info_zone_boundaries;
 
 let loaded = false;
@@ -613,25 +734,25 @@ setTimeout(load, 500);
 
 function load() {
     inventory_zones = [
-        create_inventory_zone(player_entity.inventory, inventory_image, [0, 0, null, canvas.height], inventory_margins, default_slot_info),
-        create_inventory_zone(null, inventory_image, [null, 0, canvas.width, canvas.height], inventory_margins, default_slot_info),
-        create_inventory_zone(player_entity.equipped_items, equipped_slots_image, [0, null, canvas.width, canvas.height], [8 / 227, 8 / 30, 8 / 227, 8 / 30], default_slot_info),
+        create_inventory_zone(player_entity.inventory, inventory_image, [0, 0, inv_width_percent * canvas.width, null], inventory_margins, default_slot_info),
+        create_inventory_zone(null, inventory_image, [canvas.width * (1 - inv_width_percent), 0, canvas.width, null], inventory_margins, default_slot_info),
+        create_inventory_zone(player_entity.equipped_items, equipped_slots_image, [0, (1 - 0.235) * canvas.height, null, canvas.height], [8 / 227, 8 / 30, 8 / 227, 8 / 30], default_slot_info),
     ]
 
     info_zone_boundaries = calculate_zone_boundaries(info_image, info_boundaries, info_margins);
-    console.log('info_z', info_zone_boundaries)
-
     loaded = true;
+
+    console.log(amulet_image.src);
 }
 
 
 // -------------------------------------------------------------------- End Element Positions ----------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------- Render ----------------------------------------------------------------------------------------------
 
-let cell_size = 40;
-let cell_margin = 4;
+let cell_size = /* 320; */ 40;
+let cell_margin = /* 32; */ 4;
 let zoom = cell_size / 40.0;
-const camera_origin = [canvas.width / 2, canvas.height / 2];
+const camera_origin = /* [20, 20] */[canvas.width / 2, canvas.height / 2];
 const camera_speed = 10;
 
 /** @type {Array<Visual_Effect>} */
@@ -649,10 +770,13 @@ function draw() {
     time_since_entity_hovered += 1;
 
     const translation = [-camera_origin[0] * zoom + (canvas.width / 2), -camera_origin[1] * zoom + canvas.height / 2];
-    const hovered_cell = [
+    let hovered_cell = [
         Math.floor((mouse_position[0] - translation[0]) / cell_size),
         Math.floor((mouse_position[1] - translation[1]) / cell_size)
     ]
+
+    if (hovered_cell[0] < 0 || hovered_cell[0] >= world_area_size || hovered_cell[1] < 0 || hovered_cell[1] >= world_area_size)
+        hovered_cell = null;
 
     // Clear
     ctx.fillStyle = 'rgb(200, 200, 220, 1)';
@@ -740,14 +864,12 @@ function draw() {
     for (let i = 0; i < players.length; i++) {
         const player = players[i];
         const entity = entities[player.entity_index];
-        const x = entity.visual_x + cell_margin;
-        const y = entity.visual_y + cell_margin;
+        const x = entity.visual_x;
+        const y = entity.visual_y;
 
         ctx.drawImage(player_image, x, y, 32 * zoom, 32 * zoom);
-        ctx.drawImage(chestplate_image, x, y, 32 * zoom, 32 * zoom);
-        ctx.drawImage(helmet_image, x, y - 32 * zoom + 1, 32 * zoom, 32 * zoom);
-        ctx.drawImage(sword_image, x - zoom * 0, y, 32 * zoom, 32 * zoom);
-        //ctx.drawImage(bow_image, x, y, 32 * zoom, 32 * zoom);
+
+        draw_equipped_items(entity, x, y, zoom);
     }
 
     // Draw paths
@@ -765,7 +887,7 @@ function draw() {
         ctx.stroke();
     }
 
-    const entity_on_hovered_cell = entity_positions[hovered_cell[0]][hovered_cell[1]];
+    const entity_on_hovered_cell = hovered_cell ? entity_positions[hovered_cell[0]][hovered_cell[1]] : null;
     if (entity_on_hovered_cell) {
         hovered_entity = entity_on_hovered_cell;
         time_since_entity_hovered = 0;
@@ -778,7 +900,7 @@ function draw() {
         const entity = entities[i];
         if (!entity) continue;
 
-        if (entity.next_x
+        if (entity.next_x && hovered_cell
             && hovered_cell[0] == entity.x + Math.sign(entity.next_x - entity.x)
             && hovered_cell[1] == entity.y + Math.sign(entity.next_y - entity.y)) {
             hovered_entity = entity;
@@ -787,8 +909,8 @@ function draw() {
 
         if (entity.entity_type != 'PLAYER') {
             const entity_size = cell_size - cell_margin * 2;
-            const x = entity.visual_x + cell_margin;
-            const y = entity.visual_y + cell_margin;
+            const x = entity.visual_x;
+            const y = entity.visual_y;
 
             ctx.fillStyle = 'red';
             ctx.fillRect(x, y, entity_size, entity_size);
@@ -859,20 +981,12 @@ function draw() {
         }
     }
 
-    if (dragged_slot_zone)
-        draw_image_boundaries(dragged_slot_zone.equipment.image, dragged_slot_zone.zone_boundaries);
-
     // Equipment Info in Inventory
     if (inventory_zones[0].visible) {
         draw_image_boundaries(info_image, info_boundaries);
 
 
         if (hovered_slot_zone || dragged_slot_zone) {
-
-            ctx.font = '20px "Press Start 2P"';
-            ctx.fillStyle = '#00FF00';
-            ctx.textAlign = 'left';
-            ctx.textBaseline = 'top';
 
             const equipment = hovered_slot_zone?.equipment || dragged_slot_zone?.equipment;
             if (equipment) {
@@ -901,12 +1015,26 @@ function draw() {
                         strings[key] += " | "
                     }
 
-                    strings[key] += (value * 100 - 100) + "%";
+                    strings[key] += (value * 100 - 100).toFixed(1) + "%";
                 })
 
                 delete strings["current_hp"];
 
+
                 let line_height = boundaries[1];
+
+                ctx.font = '30px "Press Start 2P"';
+                ctx.fillStyle = '#00FF00';
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'top';
+
+                ctx.fillText(equipment.display_name, boundaries[0], line_height, boundaries[2] - boundaries[0]);
+                line_height += 40;
+                ctx.fillText("----------------------------------", boundaries[0], line_height, boundaries[2] - boundaries[0]);
+                line_height += 40;
+
+                ctx.font = '20px "Press Start 2P"';
+
                 const str_keys = Object.keys(strings);
                 for (let i = 0; i < str_keys.length; i++) {
                     const str = strings[str_keys[i]];
@@ -917,6 +1045,10 @@ function draw() {
 
         }
     }
+
+
+    if (dragged_slot_zone)
+        draw_image_boundaries(dragged_slot_zone.equipment.image, dragged_slot_zone.zone_boundaries);
 
 }
 
@@ -933,6 +1065,28 @@ function draw_image_dimensions(img, dimensions) {
 /** @type {(img: HTMLImageElement, boundaries: Margins)} */
 function draw_image_boundaries(img, boundaries) {
     ctx.drawImage(img, boundaries[0], boundaries[1], boundaries[2] - boundaries[0], boundaries[3] - boundaries[1]);
+}
+
+/** @type {(entity: Entity, x: number, y: number, zoom: number)} */
+function draw_equipped_items(entity, x, y, zoom) {
+
+    /** @type {Set<HTMLImageElement} */
+    const images = new Set();
+
+    for (let j = 0; j < entity.equipped_items.equipments.length; j++) {
+        const equipment = entity.equipped_items.equipments[j];
+        if (equipment.image) {
+            images.add(equipment.image);
+        }
+    }
+
+    if (images.has(chestplate_image)) ctx.drawImage(chestplate_image, x, y, 32 * zoom, 32 * zoom);
+    if (images.has(amulet_image)) ctx.drawImage(amulet_image, 0, 2, 16, 14, x + 8 * zoom, y + 4 * zoom, 16 * zoom, 14 * zoom);
+    if (images.has(helmet_image)) ctx.drawImage(helmet_image, x, y - 32 * zoom + 1, 32 * zoom, 32 * zoom);
+    if (images.has(sword_image)) ctx.drawImage(sword_image, x - zoom * 0, y, 32 * zoom, 32 * zoom);
+    if (images.has(bow_image)) ctx.drawImage(bow_image, x, y, 32 * zoom, 32 * zoom);
+    //ctx.drawImage(bow_image, x, y, 32 * zoom, 32 * zoom);
+
 }
 
 // ----------------------------------------------------------------------------- End render -------------------------------------------------------------------------------------
@@ -1437,6 +1591,10 @@ function change_path(entity, path_steps, append = false) {
 
 function get_random_int(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function get_random_float(min, max) {
+    return Math.random() * (max - min) + min;
 }
 
 setInterval(() => {
