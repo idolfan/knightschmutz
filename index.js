@@ -1,4 +1,4 @@
-// ------------------------------------------------------------------------- canvas -------------------------------------------------------------------------------------------------
+//#region ------------------------------------------------------------------- Canvas ------------------------------------------
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 function resizeCanvas() {
@@ -8,8 +8,8 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas, false);
 resizeCanvas();
 
-// ----------------------------------------------------------------------- End canvas -----------------------------------------------------------------------------------------------
-// ------------------------------------------------------------------------- Images ----------------------------------------------------------------------------------------------- 
+//#endregion ------------------------------------------------------------------------------------------------------------------
+//#region ------------------------------------------------------------------- Images ------------------------------------------
 
 const player_image = new Image();
 player_image.src = './images/player.png';
@@ -41,8 +41,8 @@ const slot_image_margin = 5 / 32;
 const equipped_slots_image = new Image();
 equipped_slots_image.src = './images/equipped_slots.png';
 
-// ----------------------------------------------------------------------- End Images ---------------------------------------------------------------------------------------------
-// ------------------------------------------------------------------------ Constants ---------------------------------------------------------------------------------------------
+//#endregion ------------------------------------------------------------------------------------------------------------------
+//#region ------------------------------------------------------------------ Constants ----------------------------------------
 
 const Cell_Type = Object.freeze({
     EMPTY: 0,
@@ -81,8 +81,8 @@ const Inventory_Type = {
     EQUIPPED: 'EQUIPPED',
 };
 
-// ---------------------------------------------------------------------- End Constants -------------------------------------------------------------------------------------------
-// ----------------------------------------------------------------------- Game state ---------------------------------------------------------------------------------------------
+//#endregion ------------------------------------------------------------------------------------------------------------------
+//#region ------------------------------------------------------------------ Game state ---------------------------------------
 
 const ticks_per_second = 60;
 const world_area_size = 100;
@@ -134,8 +134,8 @@ let hovered_entity;
 let inventory_zones = [];
 
 
-// ----------------------------------------------------------------------- End game state -------------------------------------------------------------------------------------------
-// -------------------------------------------------------------------------- Equipment ---------------------------------------------------------------------------------------------
+//#endregion --------------------------------------------------------------------------------------------------------------------
+//#region ------------------------------------------------------------------- Equipment ---------------------------------------
 
 /** @type {Create_Equipment} */
 const test_amulet_equipment = (favour = 0) => {
@@ -221,8 +221,8 @@ const test_bow_equipment = (favour = 0) => {
 }
 
 
-// ------------------------------------------------------------------------ End equipment -------------------------------------------------------------------------------------------
-// --------------------------------------------------------------------- Inventory Management -------------------------------------------------------------------------------------------
+// #endregion -----------------------------------------------------------------------------------------------------------------
+//#region -------------------------------------------------------------- Iventory management-----------------------------------
 
 /** @type {(inventory: Inventory, image: HTMLImageElement, boundaries: Margins, margins: Margins, slot_info: Slot_Info) => Inventory_Zone} */
 function create_inventory_zone(inventory, image, boundaries, margins, slot_info) {
@@ -314,7 +314,9 @@ function init_slots(inventory_zone, inventory) {
                     equipment: equipment,
                     inventory: inventory,
                     inventory_zone: inventory_zone,
-                    zone_boundaries: [i + slot_width * slot_margins[0], j + slot_height * slot_margins[1], i + slot_width * (1 - slot_margins[2]), j + slot_height * (1 - slot_margins[3])],
+                    zone_boundaries: [
+                        i + slot_width * slot_margins[0],
+                        j + slot_height * slot_margins[1], i + slot_width * (1 - slot_margins[2]), j + slot_height * (1 - slot_margins[3])],
                 }
 
                 inventory_zone.slots.push(slot);
@@ -397,8 +399,8 @@ function close_inventory(inventory) {
 
 }
 
-// ------------------------------------------------------------------ End Inventory Management -------------------------------------------------------------------------------------------
-// --------------------------------------------------------------------- Entitiy definitions ----------------------------------------------------------------------------------------
+//#endregion ------------------------------------------------------------------------------------------------------------------
+//#region --------------------------------------------------------------- Entity definitions ----------------------------------
 /** @type {Create_Entity} */
 const red_square_entity = (x, y) => {
     return {
@@ -415,8 +417,8 @@ const red_square_entity = (x, y) => {
         attack_timer: ticks_per_second,
     }
 }
-// ------------------------------------------------------------------- End Entity definitions ---------------------------------------------------------------------------------------
-// ------------------------------------------------------------------------- Init state ---------------------------------------------------------------------------------------------
+//#endregion ------------------------------------------------------------------------------------------------------------------
+//#region ------------------------------------------------------------------- Init state --------------------------------------
 
 const chest_loot_table = [
     [test_amulet_equipment, 1],
@@ -457,7 +459,7 @@ for (let i = 0; i < world_area_size; i++) {
 
         if (area_board[i][j] == 2) {
             const equipments = [];
-            
+
             const favour = (Math.floor((Math.random() - 0.2) * 12));
 
             for (let i = 0; i < 20; i++) {
@@ -500,9 +502,8 @@ for (let i = 0; i < start_entites.length; i++) {
     add_entity(entity);
 }
 
-// ----------------------------------------------------------------------- End init state -------------------------------------------------------------------------------------------
-// ---------------------------------------------------------------------- Entity Management ---------------------------------------------------------------------------------------------
-
+//#endregion ------------------------------------------------------------------------------------------------------------------
+//#region --------------------------------------------------------------- Entity Management -----------------------------------
 /** @type {(entity: Entity)} */
 function calculate_entity_stats(entity) {
     if (!entity) {
@@ -702,9 +703,8 @@ function entity_on_kill(combat_context) {
 }
 
 
-// ---------------------------------------------------------------------End Entity Management ------------------------------------------------------------------------------------------
-// ---------------------------------------------------------------------- Element Positions --------------------------------------------------------------------------------------------
-
+//#endregion -------------------------------------------------------------------------------------------------------------------
+//#region --------------------------------------------------------------- Element Positions -----------------------------------
 const hud_position = [
     canvas.width * 0.01,
     canvas.height - canvas.width * 0.01,
@@ -734,9 +734,15 @@ setTimeout(load, 500);
 
 function load() {
     inventory_zones = [
-        create_inventory_zone(player_entity.inventory, inventory_image, [0, 0, inv_width_percent * canvas.width, null], inventory_margins, default_slot_info),
-        create_inventory_zone(null, inventory_image, [canvas.width * (1 - inv_width_percent), 0, canvas.width, null], inventory_margins, default_slot_info),
-        create_inventory_zone(player_entity.equipped_items, equipped_slots_image, [0, (1 - 0.235) * canvas.height, null, canvas.height], [8 / 227, 8 / 30, 8 / 227, 8 / 30], default_slot_info),
+        create_inventory_zone(player_entity.inventory, inventory_image,
+            [0, 0, inv_width_percent * canvas.width, null],
+            inventory_margins, default_slot_info),
+        create_inventory_zone(null, inventory_image,
+            [canvas.width * (1 - inv_width_percent), 0, canvas.width, null],
+            inventory_margins, default_slot_info),
+        create_inventory_zone(player_entity.equipped_items, equipped_slots_image,
+            [0, (1 - 0.235) * canvas.height, null, canvas.height],
+            [8 / 227, 8 / 30, 8 / 227, 8 / 30], default_slot_info),
     ]
 
     info_zone_boundaries = calculate_zone_boundaries(info_image, info_boundaries, info_margins);
@@ -746,8 +752,8 @@ function load() {
 }
 
 
-// -------------------------------------------------------------------- End Element Positions ----------------------------------------------------------------------------------------------
-// ---------------------------------------------------------------------------- Render ----------------------------------------------------------------------------------------------
+//#endregion ---------------------------------------------------------------------------------------------------------------------
+//#region -------------------------------------------------------------------- Render -----------------------------------------
 
 let cell_size = /* 320; */ 40;
 let cell_margin = /* 32; */ 4;
@@ -855,7 +861,9 @@ function draw() {
             ctx.globalAlpha = (duration_percent > peak_at ? 1 - (duration_percent - peak_at) / (1 - peak_at)
                 : duration_percent / peak_at)
 
-            ctx.drawImage(visual_effect.image, cell_middle[0] - resulting_width / 2, cell_middle[1] - resulting_height / 2, resulting_width, resulting_height);
+            ctx.drawImage(visual_effect.image,
+                cell_middle[0] - resulting_width / 2, cell_middle[1] - resulting_height / 2,
+                resulting_width, resulting_height);
             ctx.globalAlpha = 1;
         }
     }
@@ -948,7 +956,8 @@ function draw() {
     ctx.fillRect(hud_position[0], hud_position[1], hud_position[2], hud_position[3]);
     ctx.fillStyle = 'red';
     const hp_hud_thickness = hud_position[2] / 16;
-    ctx.fillRect(hud_position[0] + hp_hud_thickness, hud_position[1], (hud_position[2] - hp_hud_thickness * 2) * hp_percent, hud_position[3]);
+    ctx.fillRect(hud_position[0] + hp_hud_thickness, hud_position[1],
+        (hud_position[2] - hp_hud_thickness * 2) * hp_percent, hud_position[3]);
     ctx.drawImage(hp_hud_Image, hud_position[0], hud_position[1], hud_position[2], hud_position[3]);
 
     if (player_entity) {
@@ -956,7 +965,9 @@ function draw() {
         ctx.fillStyle = '#00FF00';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(`${player_entity.stats.current_hp.toFixed(0)} / ${player_entity.stats.max_hp.toFixed(0)}`, hud_position[0] + hud_position[2] / 2, hud_position[1] + hud_position[3] / 2);
+        ctx.fillText(
+            `${player_entity.stats.current_hp.toFixed(0)} / ${player_entity.stats.max_hp.toFixed(0)}`,
+            hud_position[0] + hud_position[2] / 2, hud_position[1] + hud_position[3] / 2);
     }
 
     // Inventory
@@ -1089,8 +1100,8 @@ function draw_equipped_items(entity, x, y, zoom) {
 
 }
 
-// ----------------------------------------------------------------------------- End render -------------------------------------------------------------------------------------
-// ----------------------------------------------------------------------------Input handling -----------------------------------------------------------------------------------
+//#endregion ---------------------------------------------------------------------------------------------------------------------
+//#region ----------------------------------------------------------------- Input handling ------------------------------------
 
 const mouse_position = [0, 0];
 let time_since_entity_hovered = 0;
@@ -1269,8 +1280,8 @@ function handle_inputs() {
     }
 }
 
-// ---------------------------------------------------------------------------- End input handling -------------------------------------------------------------------------------
-// -------------------------------------------------------------------------------- Listeners ------------------------------------------------------------------------------------
+//#endregion --------------------------------------------------------------------------------------------
+//#region ------------------------------------------------------------------- Listeners ---------------------------------------
 window.addEventListener('keydown', (event) => {
     const key = event.key;
     // console.log('key', key.toLowerCase());
@@ -1383,8 +1394,8 @@ window.addEventListener("mousemove", (event) => {
     mouse_position[1] = event.clientY;
 })
 
-// -------------------------------------------------------------------------------- End Listeners -------------------------------------------------------------------------------
-// ---------------------------------------------------------------------------------- Updating -----------------------------------------------------------------------------------
+//#endregion -----------------------------------------------------------------------------------------------------------------
+//#region -------------------------------------------------------------------- Updating --------------------------------------
 
 render();
 
@@ -1656,9 +1667,8 @@ function chase_entity(source_entity, target_entity, action) {
     }
 }
 
-// -------------------------------------------------------------------------------- End updating ------------------------------------------------------------------------------
-// -------------------------------------------------------------------------------- Requirements ------------------------------------------------------------------------------
-
+//#endregion ----------------------------------------------------------------------------------------------------------------
+//#region ------------------------------------------------------------------ Requirements -------------------------------------
 /** @type {Requirement} */
 const in_melee_range_requirement = (context) => {
     const in_range = get_distance(context) <= 1.5;
@@ -1680,8 +1690,8 @@ const attack_timer_up_requirement = (context) => {
     return attack_timer_up;
 }
 
-// ------------------------------------------------------------------------------ End Requirements -----------------------------------------------------------------------------
-// ---------------------------------------------------------------------------------- Actions ----------------------------------------------------------------------------------
+//#endregion ------------------------------------------------------------------------------------------------------------------
+//#region --------------------------------------------------------------------- Actions ---------------------------------------
 
 const log_requirements = false;
 
@@ -1704,7 +1714,10 @@ function take_action(context, action) {
 
 /** @type {(context: Context) => number} */
 function get_distance(context) {
-    return Math.sqrt((context.source_entity.x - context.target_entity.x) * (context.source_entity.x - context.target_entity.x) + (context.source_entity.y - context.target_entity.y) * (context.source_entity.y - context.target_entity.y));
+    return Math.sqrt((context.source_entity.x - context.target_entity.x)
+        * (context.source_entity.x - context.target_entity.x)
+        + (context.source_entity.y - context.target_entity.y)
+        * (context.source_entity.y - context.target_entity.y));
 }
 
 /** @type {Action} */
@@ -1720,4 +1733,4 @@ const melee_attack = {
     }]
 }
 
-// --------------------------------------------------------------------------------- End Actions ------------------------------------------------------------------------------
+//#endregion --------------------------------------------------------------------------------------------------------------
