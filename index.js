@@ -37,6 +37,7 @@ const info_image = new Image();
 info_image.src = './images/info.png';
 const slot_image = new Image();
 slot_image.src = './images/slot.png';
+const slot_image_margin = 5 / 32;
 const equipped_slots_image = new Image();
 equipped_slots_image.src = './images/equipped_slots.png';
 
@@ -57,6 +58,26 @@ const Stat_Display_Names = Object.freeze({
     armor: "Armor",
 
 })
+
+/**
+ * @enum {string}
+ */
+const Equipment_Type = {
+    CHESTPLATE: 'CHESTPLATE',
+    HELMET: 'HELMET',
+    RING: 'RING',
+    BRACELET: 'BRACELET',
+    AMULET: 'AMULET'
+};
+
+/**
+ * @enum {string}
+ */
+const Inventory_Type = {
+    OTHER: 'OTHER',
+    PLAYER: 'PLAYER',
+    EQUIPPED: 'EQUIPPED',
+};
 
 // ---------------------------------------------------------------------- End Constants -------------------------------------------------------------------------------------------
 // ----------------------------------------------------------------------- Game state ---------------------------------------------------------------------------------------------
@@ -107,6 +128,9 @@ let opened_equipped_inventory;
 /** @type {Entity} */
 let hovered_entity;
 
+/** @type {Array<Inventory_Zone} */
+let inventory_zones = [];
+
 
 // ----------------------------------------------------------------------- End game state -------------------------------------------------------------------------------------------
 // -------------------------------------------------------------------------- Equipment ---------------------------------------------------------------------------------------------
@@ -126,8 +150,114 @@ const test_amulet_equipment = (favour) => {
 // ------------------------------------------------------------------------ End equipment -------------------------------------------------------------------------------------------
 // --------------------------------------------------------------------- Inventory Management -------------------------------------------------------------------------------------------
 
-/** @type {(current_inventory: Inventory, new_inventory: Inventory, equipment: Equipment)} */
-function transfer_equipment(current_inventory, new_inventory, equipment) {
+/** @type {(inventory: Inventory, image: HTMLImageElement, boundaries: Margins, margins: Margins, slot_info: Slot_Info) => Inventory_Zone} */
+function create_inventory_zone(inventory, image, boundaries, margins, slot_info) {
+
+    const b = [...boundaries];
+    let height = b[3] - b[1];
+    let width = b[2] - b[0];
+    if (b[3] == null || b[1] == null) height = image.height * (width / image.width);
+    if (b[2] == null || b[0] == null) width = image.width * (height / image.height);
+
+    if (b[0] == null) b[0] = b[2] - width;
+    else if (b[1] == null) b[1] = b[3] - height;
+    else if (b[2] == null) b[2] = b[0] + width;
+    else if (b[3] == null) b[3] = b[1] + height;
+
+    const zone_boundaries = [
+        b[0] + width * margins[0],
+        b[1] + height * margins[1],
+        b[2] - width * margins[2],
+        b[3] - height * margins[3]
+    ]
+
+    /** @type {Inventory_Zone} */
+    const inventory_zone = {
+        visible: false,
+        image: image,
+        inventory: inventory,
+        margins: margins,
+        zone_boundaries: zone_boundaries,
+        boundaries: b,
+        slot_info,
+        slots: [],
+    }
+
+    init_slots(inventory_zone, inventory);
+
+    return inventory_zone;
+}
+
+/** @type {(image: HTMLImageElement, boundaries: Margins, margins: Margins) => Margins} */
+function calculate_zone_boundaries(image, boundaries, margins){
+    const b = [...boundaries];
+    let height = b[3] - b[1];
+    let width = b[2] - b[0];
+    if (b[3] == null || b[1] == null) height = image.height * (width / image.width);
+    if (b[2] == null || b[0] == null) width = image.width * (height / image.height);
+
+    if (b[0] == null) b[0] = b[2] - width;
+    else if (b[1] == null) b[1] = b[3] - height;
+    else if (b[2] == null) b[2] = b[0] + width;
+    else if (b[3] == null) b[3] = b[1] + height;
+
+    const zone_boundaries = [
+        b[0] + width * margins[0],
+        b[1] + height * margins[1],
+        b[2] - width * margins[2],
+        b[3] - height * margins[3]
+    ]
+
+    return zone_boundaries;
+}
+
+/** @type {(inventory_zone: Inventory_Zone, inventory: Inventory)} */
+function init_slots(inventory_zone, inventory) {
+    const slot_info = inventory_zone.slot_info;
+    const zone_boundaries = inventory_zone.zone_boundaries;
+    const slot_width = slot_info.width;
+    const slot_height = slot_info.height;
+    const slot_distances = slot_info.slot_distances;
+    const slot_margins = slot_info.zone_margin;
+
+    inventory_zone.slots = [];
+    inventory_zone.inventory = inventory;
+
+    let slot_index = 0;
+    if (inventory) {
+        for (let j = zone_boundaries[1]; j < zone_boundaries[3] - slot_height; j += slot_height + slot_distances[1]) {
+            for (let i = zone_boundaries[0]; i < zone_boundaries[2] - slot_width; i += slot_width + slot_distances[0]) {
+                if (slot_index >= inventory.slot_count) break;
+
+                const equipment = inventory.equipments[slot_index];
+
+                /** @type {Slot} */
+                const slot = {
+                    x: i,
+                    y: j,
+                    width: slot_width,
+                    height: slot_height,
+                    equipment: equipment,
+                    inventory: inventory,
+                    inventory_zone: inventory_zone,
+                    zone_boundaries: [i + slot_width * slot_margins[0], j + slot_height * slot_margins[1], i + slot_width * (1 - slot_margins[2]), j + slot_height * (1 - slot_margins[3])],
+                }
+
+                inventory_zone.slots.push(slot);
+
+                slot_index++;
+            }
+        }
+    }
+}
+
+/** @type {(current_slot: Slot, new_slot: Slot, equipment: Equipment)} */
+function transfer_equipment(current_slot, new_slot, equipment) {
+
+    const current_inventory = current_slot.inventory;
+    const new_inventory = new_slot.inventory;
+    const new_slot_equipment = new_slot?.equipment;
+
     for (let i = 0; i < current_inventory.equipments.length; i++) {
         const comparison_equipment = current_inventory.equipments[i];
         if (comparison_equipment == equipment) {
@@ -136,100 +266,27 @@ function transfer_equipment(current_inventory, new_inventory, equipment) {
         }
     }
 
+    if (new_slot_equipment) {
+        for (let i = 0; i < new_inventory.equipments.length; i++) {
+            const comparison_equipment = new_inventory.equipments[i];
+            if (comparison_equipment == new_slot_equipment) {
+                new_inventory.equipments.splice(i, 1);
+                break;
+            }
+        }
+    }
+
     if (new_inventory) {
         new_inventory.equipments.push(equipment);
     }
 
-    if (current_inventory == opened_equipped_inventory || new_inventory == opened_equipped_inventory) {
-        calculate_entity_stats(player_entity);
-    }
-}
+    new_slot.equipment = equipment;
+    current_slot.equipment = new_slot_equipment;
 
-/** @type {(inventory: Inventory, is_player: boolean, image_dimensions: Dimensions, inventory_boundaries: Boundaries)} */
-function open_inventory(inventory, image_dimensions, inventory_boundaries) {
-
-    const element_size = Math.floor(image_dimensions[2] / 10);
-
-    inventory_zones.push({
-        x: inventory_boundaries[0], y: inventory_boundaries[1], width: inventory_boundaries[2] - inventory_boundaries[0],
-        height: inventory_boundaries[3] - inventory_boundaries[1],
-        inventory: inventory
-    });
-
-    let equipment_index = 0;
-
-    add_item_zones(inventory, image_dimensions, inventory_boundaries);
-
-}
-
-/** @type {(inventory: Inventory)} */
-function open_player_inventory(inventory) {
-    opened_player_inventory = inventory;
-    open_inventory(inventory, player_inventory_image_dimensions, player_inventory_boundaries);
-}
-
-/** @type {(inventory: Inventory)} */
-function open_other_inventory(inventory) {
-    opened_inventory = inventory;
-    open_inventory(inventory, other_inventory_image_dimensions, other_inventory_boundaries);
-}
-
-/** @type {(inventory: Inventory)} */
-function open_equipped_inventory(inventory) {
-    opened_equipped_inventory = inventory;
-    open_inventory(inventory, equipped_dimensions, equipped_inventory_boundaries);
-}
-
-/** @type {(inventory: Inventory)} */
-function remove_item_zones(inventory) {
-    inventory.equipments.forEach((equipment) => {
-        for (let i = 0; i < item_interaction_zones.length; i++) {
-            const zone = item_interaction_zones[i];
-            if (zone.equipment == equipment) {
-                item_interaction_zones.splice(i, 1);
-                i--;
-            }
-        }
-    });
-}
-
-/** @type {(inventory: Inventory, image_dimensions: Dimensions, inventory_boundaries: Boundaries)} */
-function add_item_zones(inventory, image_dimensions, inventory_boundaries) {
-
-    if (!image_dimensions) {
-        if (opened_player_inventory == inventory) {
-            image_dimensions = player_inventory_image_dimensions;
-            inventory_boundaries = player_inventory_boundaries;
-        }
-        else if (opened_inventory == inventory) {
-            image_dimensions = other_inventory_image_dimensions;
-            inventory_boundaries = other_inventory_boundaries;
-        }
-        else if (opened_equipped_inventory == inventory) {
-            image_dimensions = equipped_dimensions;
-            inventory_boundaries = equipped_inventory_boundaries;
-        }
-    }
-
-    const element_size = Math.floor(image_dimensions[2] / 10);
-
-    let equipment_index = 0;
-    for (let j = inventory_boundaries[1]; j < inventory_boundaries[3] - element_size; j += element_size + image_dimensions[2] / 20) {
-        for (let i = inventory_boundaries[0]; i < inventory_boundaries[2] - element_size; i += element_size + image_dimensions[2] / 20) {
-            const equipment = inventory.equipments[equipment_index];
-            if (!equipment) break;
-
-            item_interaction_zones.push({
-                x: i,
-                y: j,
-                width: element_size,
-                height: element_size,
-                equipment: equipment,
-                inventory: inventory,
-            })
-
-            equipment_index++;
-        }
+    if (current_inventory.type == Inventory_Type.EQUIPPED || new_inventory.type == Inventory_Type.EQUIPPED) {
+        calculate_entity_stats(current_inventory.entity);
+        if (current_inventory != new_inventory)
+            calculate_entity_stats(new_inventory.entity);
     }
 }
 
@@ -237,13 +294,10 @@ function add_item_zones(inventory, image_dimensions, inventory_boundaries) {
 function close_inventory(inventory) {
     if (!inventory) return;
 
-    if (dragged_zone) {
-        dragged_zone.x = drag_start[0];
-        dragged_zone.y = drag_start[1];
-        dragged_zone = null;
+    if (dragged_slot_zone) {
+        dragged_slot_zone.zone_boundaries = [...drag_start]
+        dragged_slot_zone = null;
     }
-
-    remove_item_zones(inventory);
 
     for (let i = 0; i < inventory_zones.length; i++) {
         const zone = inventory_zones[i];
@@ -299,7 +353,9 @@ for (let i = 0; i < world_area_size; i++) {
             for (let i = 0; i < 20; i++) {
                 equipments.push(test_amulet_equipment());
             }
-            chest_inventories.set(i + ' ' + j, { equipments: equipments });
+            /** @type {Inventory} */
+            const inventory = { equipments: equipments, slot_count: 20, type: Inventory_Type.OTHER };
+            chest_inventories.set(i + ' ' + j, inventory);
         }
     }
 }
@@ -338,6 +394,10 @@ for (let i = 0; i < start_entites.length; i++) {
 
 /** @type {(entity: Entity)} */
 function calculate_entity_stats(entity) {
+    if(!entity) {
+        //console.log("No entity on calculate stats!");
+        return;
+    }
 
     const hp_percent = entity?.stats?.current_hp / entity?.stats?.max_hp;
 
@@ -386,6 +446,7 @@ function add_entity(entity) {
 /** @type {(player: Player) => Player} */
 function add_player(player) {
     /** @type {Entity} */
+
     const player_entity = {
         display_name: player.display_name,
         x: 10,
@@ -401,9 +462,23 @@ function add_player(player) {
         on_death: [],
         on_scored_hit: [],
         on_taken_hit: [],
-        equipped_items: { equipments: [test_amulet_equipment()] },
-        inventory: { equipments: [/* test_amulet_equipment() */] }
     }
+
+    const equipped_inventory = {
+        equipments: [test_amulet_equipment()],
+        slot_count: 8,
+        type: Inventory_Type.EQUIPPED,
+        entity: player_entity,
+    };
+    const inventory = {
+        equipments: [/* test_amulet_equipment() */],
+        slot_count: 10,
+        type: Inventory_Type.PLAYER,
+    };
+
+    player_entity.equipped_items = equipped_inventory;
+    player_entity.inventory = inventory;
+
     player.entity_index = add_entity(player_entity).entity_index;
     player.player_index = players.length;
     players.push(player);
@@ -508,82 +583,7 @@ function entity_on_kill(combat_context) {
 
 
 // ---------------------------------------------------------------------End Entity Management ------------------------------------------------------------------------------------------
-// ---------------------------------------------------------------------- Element Positions ----------------------------------------------------------------------------------------------
-
-// Player inventory
-
-/** @type {Dimensions} */
-const player_inventory_image_dimensions = [
-    - canvas.height * 5 / 16,
-    0,
-    canvas.height,
-    canvas.height,
-]
-
-/** @type {Boundaries} */
-const player_inventory_boundaries = get_inventory_boundaries(player_inventory_image_dimensions);
-
-//
-// Other inventory
-
-/** @type {Dimensions} */
-const other_inventory_image_dimensions = [
-    canvas.width / 2,
-    0,
-    canvas.height,
-    canvas.height,
-]
-
-/** @type {Boundaries} */
-const other_inventory_boundaries = get_inventory_boundaries(other_inventory_image_dimensions);
-
-//
-// Info inventory
-
-/** @type {Dimensions} */
-const info_dimensions = [
-    canvas.height / 3,
-    0,
-    canvas.height,
-    canvas.height
-]
-
-/** @type {Boundaries} */
-const info_boundaries = get_inventory_boundaries(info_dimensions);
-
-const equipped_dimensions = info_dimensions;
-
-const equipped_inventory_boundaries = get_equipped_inventory_boundaries(equipped_dimensions);
-
-function get_equipped_inventory_boundaries(dimensions) {
-    const x = dimensions[0];
-    const y = dimensions[1];
-    const width = dimensions[2];
-    const height = dimensions[3];
-    return [
-        x + width * 3 / 8,
-        y + 11 / 16 * height,
-        x + width * 15 / 16,
-        y + height - 1 / 16,
-    ]
-}
-
-/** @type {(dimensions: Dimensions) => Boundaries} */
-function get_inventory_boundaries(dimensions) {
-    const x = dimensions[0];
-    const y = dimensions[1];
-    const width = dimensions[2];
-    const height = dimensions[3];
-    return [
-        x + width * 3 / 8,
-        y + 1 / 16 * height,
-        x + width * 15 / 16,
-        y + height - 1 / 16,
-    ]
-}
-
-//
-// HUD
+// ---------------------------------------------------------------------- Element Positions --------------------------------------------------------------------------------------------
 
 const hud_position = [
     canvas.width * 0.01,
@@ -591,6 +591,39 @@ const hud_position = [
     canvas.width * 0.20,
     -canvas.width * 0.05
 ]
+
+const inventory_margins = [1 / 11, 1 / 16, 1 / 11, 1 / 16];
+
+/** @type {Slot_Info} */
+const default_slot_info = {
+    image: slot_image,
+    zone_margin: [5 / 32, 5 / 32, 5 / 32, 5 / 32],
+    width: canvas.height / 12,
+    height: canvas.height / 12,
+    slot_distances: [10, 10]
+}
+
+const info_boundaries = [canvas.width / 3, 0, canvas.width / 3 + canvas.height * 84 / 128, canvas.height * 84 / 128];
+const info_margins = [8 / 88, 8 / 84, 8 / 88, 8 / 84];
+let info_zone_boundaries;
+
+let loaded = false;
+
+setTimeout(load, 500);
+
+function load() {
+    inventory_zones = [
+        create_inventory_zone(player_entity.inventory, inventory_image, [0, 0, null, canvas.height], inventory_margins, default_slot_info),
+        create_inventory_zone(null, inventory_image, [null, 0, canvas.width, canvas.height], inventory_margins, default_slot_info),
+        create_inventory_zone(player_entity.equipped_items, equipped_slots_image, [0, null, canvas.width, canvas.height], [8 / 227, 8 / 30, 8 / 227, 8 / 30], default_slot_info),
+    ]
+
+    info_zone_boundaries = calculate_zone_boundaries(info_image, info_boundaries, info_margins);
+    console.log('info_z', info_zone_boundaries)
+
+    loaded = true;
+}
+
 
 // -------------------------------------------------------------------- End Element Positions ----------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------- Render ----------------------------------------------------------------------------------------------
@@ -610,6 +643,7 @@ ctx.imageSmoothingEnabled = false;
 
 
 function draw() {
+    if (!loaded) return;
 
     updateCamera();
     time_since_entity_hovered += 1;
@@ -804,78 +838,85 @@ function draw() {
     }
 
     // Inventory
-    if (opened_inventory) {
-        draw_image_dimensions(inventory_image, other_inventory_image_dimensions);
+    for (let i = 0; i < inventory_zones.length; i++) {
+        const inventory_zone = inventory_zones[i];
+        if (!inventory_zone.visible) continue;
+
+        draw_image_boundaries(inventory_zone.image, inventory_zone.boundaries);
+        const slot_img = inventory_zone.slot_info.image;
+
+        for (let j = 0; j < inventory_zone.slots.length; j++) {
+            const slot = inventory_zone.slots[j];
+
+            if (slot_img) {
+                ctx.drawImage(slot_img, slot.x, slot.y, slot.width, slot.height);
+            }
+
+            const equipment = slot.equipment;
+            if (equipment) {
+                draw_image_boundaries(equipment.image, slot.zone_boundaries);
+            }
+        }
     }
 
-    if (opened_player_inventory) {
-        draw_image_dimensions(inventory_image, player_inventory_image_dimensions);
-
-        draw_image_dimensions(equipped_slots_image, equipped_dimensions);
-    }
+    if (dragged_slot_zone)
+        draw_image_boundaries(dragged_slot_zone.equipment.image, dragged_slot_zone.zone_boundaries);
 
     // Equipment Info in Inventory
-    if (opened_inventory || opened_player_inventory) {
-        draw_image_dimensions(info_image, info_dimensions);
+    if (inventory_zones[0].visible) {
+        draw_image_boundaries(info_image, info_boundaries);
 
 
-        if (hovered_zone || dragged_zone) {
+        if (hovered_slot_zone || dragged_slot_zone) {
 
             ctx.font = '20px "Press Start 2P"';
             ctx.fillStyle = '#00FF00';
             ctx.textAlign = 'left';
             ctx.textBaseline = 'top';
 
-            const equipment = hovered_zone?.equipment || dragged_zone?.equipment;
-            const keys = Object.keys(equipment.flat_stats);
-            const boundaries = info_boundaries;
+            const equipment = hovered_slot_zone?.equipment || dragged_slot_zone?.equipment;
+            if (equipment) {
+                const keys = Object.keys(equipment.flat_stats);
+                const boundaries = info_zone_boundaries;
 
 
-            const strings = {};
+                const strings = {};
 
-            const flat_stat_keys = Object.keys(equipment.flat_stats);
-            flat_stat_keys.forEach((key) => {
-                const value = equipment.flat_stats[key];
-                if (!strings[key]) {
-                    strings[key] = "" + (Stat_Display_Names[key] || key) + ": "
+                const flat_stat_keys = Object.keys(equipment.flat_stats);
+                flat_stat_keys.forEach((key) => {
+                    const value = equipment.flat_stats[key];
+                    if (!strings[key]) {
+                        strings[key] = "" + (Stat_Display_Names[key] || key) + ": "
+                    }
+
+                    strings[key] += value
+                })
+
+                const multiplicative_stat_keys = Object.keys(equipment.multiplicative_stats);
+                multiplicative_stat_keys.forEach((key) => {
+                    const value = equipment.multiplicative_stats[key];
+                    if (!strings[key]) {
+                        strings[key] = "" + (Stat_Display_Names[key] || key) + ": "
+                    } else {
+                        strings[key] += " | "
+                    }
+
+                    strings[key] += (value * 100 - 100) + "%";
+                })
+
+                delete strings["current_hp"];
+
+                let line_height = boundaries[1];
+                const str_keys = Object.keys(strings);
+                for (let i = 0; i < str_keys.length; i++) {
+                    const str = strings[str_keys[i]];
+                    ctx.fillText(str, boundaries[0], line_height, boundaries[2] - boundaries[0]);
+                    line_height += 30
                 }
-
-                strings[key] += value
-            })
-
-            const multiplicative_stat_keys = Object.keys(equipment.multiplicative_stats);
-            multiplicative_stat_keys.forEach((key) => {
-                const value = equipment.multiplicative_stats[key];
-                if (!strings[key]) {
-                    strings[key] = "" + (Stat_Display_Names[key] || key) + ": "
-                } else {
-                    strings[key] += " | "
-                }
-
-                strings[key] += (value * 100 - 100) + "%";
-            })
-
-            delete strings["current_hp"];
-
-            let line_height = boundaries[1];
-            const str_keys = Object.keys(strings);
-            for (let i = 0; i < str_keys.length; i++) {
-                const str = strings[str_keys[i]];
-                ctx.fillText(str, boundaries[0], line_height, boundaries[2] - boundaries[0]);
-                line_height += 30
             }
-
 
         }
     }
-
-    for (let i = 0; i < item_interaction_zones.length; i++) {
-        const zone = item_interaction_zones[i];
-        if (!zone) break;
-
-        ctx.drawImage(zone.equipment.image, zone.x, zone.y, zone.width, zone.height);
-    }
-
 
 }
 
@@ -889,26 +930,25 @@ function draw_image_dimensions(img, dimensions) {
     ctx.drawImage(img, dimensions[0], dimensions[1], dimensions[2], dimensions[3]);
 }
 
+/** @type {(img: HTMLImageElement, boundaries: Margins)} */
+function draw_image_boundaries(img, boundaries) {
+    ctx.drawImage(img, boundaries[0], boundaries[1], boundaries[2] - boundaries[0], boundaries[3] - boundaries[1]);
+}
+
 // ----------------------------------------------------------------------------- End render -------------------------------------------------------------------------------------
 // ----------------------------------------------------------------------------Input handling -----------------------------------------------------------------------------------
 
 const mouse_position = [0, 0];
 let time_since_entity_hovered = 0;
 
-/** @type {Array<Item_Interaction_Zone>} */
-const item_interaction_zones = [];
+/** @type {Slot} */
+let hovered_slot_zone;
 
-/** @type {Item_Interaction_Zone} */
-let hovered_zone;
+/** @type {Slot} */
+let dragged_slot_zone;
 
-/** @type {Item_Interaction_Zone} */
-let dragged_zone;
-
-/** @type {Array<number>} */
-const drag_start = [];
-
-/** @type {Array<Inventory_Zone} */
-const inventory_zones = [];
+/** @type {Margins} */
+let drag_start = [];
 
 const keys_pressed = {
     w: false,
@@ -950,11 +990,12 @@ function handle_inputs() {
     left_mouse_button: if (keys_typed.left_mouse_button) {
         keys_typed.left_mouse_button = false;
 
-        if (opened_inventory || opened_player_inventory) {
-            if (hovered_zone) {
-                dragged_zone = hovered_zone;
-                drag_start[0] = hovered_zone.x;
-                drag_start[1] = hovered_zone.y;
+        if (inventory_zones[0].visible || inventory_zones[1].visible) {
+            console.log('hovered', hovered_slot_zone)
+            if (hovered_slot_zone && hovered_slot_zone.equipment) {
+                dragged_slot_zone = hovered_slot_zone;
+                console.log('start drag');
+                drag_start = [...hovered_slot_zone.zone_boundaries];
             }
             break left_mouse_button;
         }
@@ -988,38 +1029,42 @@ function handle_inputs() {
     }
 
     if (keys_pressed.left_mouse_button) {
-        if (dragged_zone) {
-            dragged_zone.x = mouse_position[0] - dragged_zone.width / 2;
-            dragged_zone.y = mouse_position[1] - dragged_zone.height / 2;
+        if (dragged_slot_zone) {
+            const boundaries = dragged_slot_zone.zone_boundaries;
+            const zone_width = boundaries[2] - boundaries[0];
+            const zone_height = boundaries[3] - boundaries[1];
+            boundaries[0] = mouse_position[0] - zone_width / 2;
+            boundaries[1] = mouse_position[1] - zone_height / 2;
+            boundaries[2] = mouse_position[0] + zone_width / 2;
+            boundaries[3] = mouse_position[1] + zone_height / 2;
+
         }
     } else if (!keys_pressed.left_mouse_button) {
-        if (dragged_zone) {
+        if (dragged_slot_zone) {
             let moved = false;
-            for (let i = 0; i < inventory_zones.length; i++) {
+            transfer_eq: for (let i = 0; i < inventory_zones.length; i++) {
                 const zone = inventory_zones[i];
-                const mouse_inside = mouse_position[0] > zone.x && mouse_position[0] < zone.x + zone.width
-                    && mouse_position[1] > zone.y && mouse_position[1] < zone.y + zone.height;
-                if (mouse_inside) {
-                    if (zone.inventory != dragged_zone.inventory) {
-                        transfer_equipment(dragged_zone.inventory, zone.inventory, dragged_zone.equipment);
-                        remove_item_zones(zone.inventory);
-                        remove_item_zones(dragged_zone.inventory);
-                        add_item_zones(zone.inventory);
-                        add_item_zones(dragged_zone.inventory);
 
-                        moved = true;
-                        break;
+                for (let j = 0; j < zone.slots.length; j++) {
+                    const slot = zone.slots[j];
+                    const boundaries = slot.zone_boundaries;
+
+                    const mouse_inside = mouse_position[0] > boundaries[0] && mouse_position[0] < boundaries[2]
+                        && mouse_position[1] > boundaries[1] && mouse_position[1] < boundaries[3];
+                    if (mouse_inside) {
+                        if (slot != dragged_slot_zone) {
+                            transfer_equipment(dragged_slot_zone, slot, dragged_slot_zone.equipment);
+
+                            moved = true;
+                            break transfer_eq;
+                        }
+
                     }
-
                 }
             }
-            if (!moved) {
-                dragged_zone.x = drag_start[0];
-                dragged_zone.y = drag_start[1];
-            }
-            dragged_zone = null;
-            drag_start[0] = null;
-            drag_start[1] = null;
+            dragged_slot_zone.zone_boundaries = [...drag_start];
+            dragged_slot_zone = null;
+            drag_start = [];
 
         }
     }
@@ -1044,25 +1089,26 @@ function handle_inputs() {
         keys_typed.e = false;
 
         const cell = area_board[player_entity.x][player_entity.y];
-        if (opened_inventory) {
-            close_inventory(opened_inventory);
-            close_inventory(opened_player_inventory);
-            close_inventory(opened_equipped_inventory);
+        if (inventory_zones[1].visible) {
+            inventory_zones[0].visible = false;
+            inventory_zones[1].visible = false;
+            inventory_zones[2].visible = false;
         } else if (cell == 2) {
             opened_inventory = chest_inventories.get(player_entity.x + " " + player_entity.y);
 
-            open_other_inventory(opened_inventory);
-            if (!opened_player_inventory) open_player_inventory(player_entity.inventory);
+            init_slots(inventory_zones[1], opened_inventory);
+            inventory_zones[1].visible = true;
+            if (!opened_player_inventory) inventory_zones[0].visible = true;
 
             if (!opened_equipped_inventory) {
-                open_equipped_inventory(player_entity.equipped_items);
+                inventory_zones[2].visible = true;
             }
-        } else if (opened_player_inventory) {
-            close_inventory(opened_player_inventory);
-            close_inventory(opened_equipped_inventory);
-        } else if (!opened_player_inventory) {
-            open_player_inventory(player_entity.inventory);
-            open_equipped_inventory(player_entity.equipped_items);
+        } else if (inventory_zones[0].visible) {
+            inventory_zones[0].visible = false;
+            inventory_zones[2].visible = false;
+        } else if (!inventory_zones[0].visible) {
+            inventory_zones[0].visible = true;
+            inventory_zones[2].visible = true;
         }
 
 
@@ -1073,7 +1119,7 @@ function handle_inputs() {
 // -------------------------------------------------------------------------------- Listeners ------------------------------------------------------------------------------------
 window.addEventListener('keydown', (event) => {
     const key = event.key;
-   // console.log('key', key.toLowerCase());
+    // console.log('key', key.toLowerCase());
     switch (key.toLowerCase()) {
         case 'w':
             keys_pressed.w = true;
@@ -1189,22 +1235,33 @@ window.addEventListener("mousemove", (event) => {
 render();
 
 function tick() {
+    if (!loaded) return;
 
     let found = false;
-    for (let i = 0; i < item_interaction_zones.length; i++) {
-        const zone = item_interaction_zones[i];
-        const mouse_inside = mouse_position[0] > zone.x && mouse_position[0] < zone.x + zone.width
-            && mouse_position[1] > zone.y && mouse_position[1] < zone.y + zone.height;
 
-        if (mouse_inside) {
-            //console.log('Mouse inside zone', zone, mouse_position);
-            hovered_zone = zone;
-            found = true;
-            break;
+    find_hovered: for (let i = 0; i < inventory_zones.length; i++) {
+        const inventory_zone = inventory_zones[i];
+        if (!inventory_zone.visible) continue;
+
+        //console.log('i',i);
+        for (let j = 0; j < inventory_zone.slots.length; j++) {
+
+            const slot = inventory_zone.slots[j];
+            const zone_b = slot.zone_boundaries;
+            //console.log('mp, zb', mouse_position, zone_b)
+            const mouse_inside = mouse_position[0] > zone_b[0] && mouse_position[0] < zone_b[2]
+                && mouse_position[1] > zone_b[1] && mouse_position[1] < zone_b[3];
+
+            if (mouse_inside) {
+                //console.log('Mouse inside zone', slot, mouse_position);
+                hovered_slot_zone = slot;
+                found = true;
+                break find_hovered;
+            }
         }
     }
 
-    if (!found) hovered_zone = null;
+    if (!found) hovered_slot_zone = null;
 
     handle_inputs();
 

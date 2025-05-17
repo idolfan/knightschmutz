@@ -74,6 +74,9 @@ const Entity_Type = {
 /** 
  * @typedef {Object} Inventory
  * @property {Array<Equipment>} equipments
+ * @property {number} slot_count - How many slots are inside the inventory
+ * @property {Inventory_Type} type
+ * @property {Entity} entity
  */
 
 /**
@@ -141,17 +144,6 @@ const Entity_Type = {
  */
 
 /**
- * @enum {string}
- */
-const Equipment_Type = {
-    CHESTPLATE: 'CHESTPLATE',
-    HELMET: 'HELMET',
-    RING: 'RING',
-    BRACELET: 'BRACELET',
-    AMULET: 'AMULET'
-};
-
-/**
  * @typedef {Object} Equipment
  * @property {Entity_Stats} flat_stats
  * @property {Entity_stats} multiplicative_stats
@@ -175,26 +167,39 @@ const Equipment_Type = {
  */
 
 /**
- * @typedef {Object} Item_Interaction_Zone
+ * @typedef {Object} Inventory_Zone
+ * @property {boolean} visible - Whether the zone is displayed
+ * @property {Inventory} inventory - The inventory which is displayed / changed
+ * @property {Margins} boundaries - The visual boundaries for the image
+ * @property {Margins} zone_boundaries - The boundaries for the area in which items are displayed
+ * @property {Margins} margins - The margins between boundaries and zone_boundaries
+ * @property {HTMLImageElement} image - The displayed image of the inventory
+ * @property {Slot_Info} slot_info
+ * @property {Array<Slot>} slots
+ */
+
+/**
+ * @typedef {Object} Slot_Info
+ * @property {Margins} zone_margin
+ * @property {HTMLImageElement} image
+ * @property {number} width
+ * @property {number} height
+ * @property {[x: number, y: number]} slot_distances - Distance between slots
+ */
+
+/**
+ * @typedef {Object} Slot
  * @property {number} x
  * @property {number} y
  * @property {number} width
  * @property {number} height
+ * @property {Margins} zone_boundaries
  * @property {Equipment} equipment
  * @property {Inventory} inventory
  */
 
-/**
- * @typedef {Object} Inventory_Zone
- * @property {number} x
- * @property {number} y
- * @property {number} width
- * @property {number} height
- * @property {Inventory} inventory
- */
-
 /** 
- * @typedef {[left: number, up: number, right: number, down: number]} Boundaries
+ * @typedef {[left: number, up: number, right: number, down: number]} Margins
  */
 
 /**
