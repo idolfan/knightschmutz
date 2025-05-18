@@ -1,6 +1,6 @@
 /**
 @typedef {Object} Player
-@property {number} id - The unique identifier for the player.
+@property {number} id
 @property {number} entity_index - The index of the entity in the entity array.
 @property {string} display_name - The name displayed for the player.
 @property {number} player_index - The index of the player in the players array.
@@ -16,31 +16,35 @@ const Entity_Type = {
 
 /**
  * @typedef {Object} Entity
- * @property {number} id - The unique identifier for the entity used as index inside data arrays.
- * @property {Entity_Type} entity_type - The type of the entity.
- * @property {string} display_name - The name displayed for the entity.
- * @property {number} x - The x-coordinate of the entity's position.
- * @property {number} y - The y-coordinate of the entity's position.
- * @property {number} next_x
- * @property {number} next_y
- * @property {Path} path - The path associated with the entity.
- * @property {Array<On_Combat_Calback>} on_death - Functions called on death
- * @property {Array<On_Combat_Calback>} on_kill - Functions called on scored kill
- * @property {Array<On_Combat_Calback>} on_scored_hit - Functions called on scored hit
- * @property {Array<On_Combat_Calback} on_taken_hit - Functions called on getting hit
- * @property {number} entity_index - The entity's index inside the entites array
- * @property {number} enemy_entity_index - The entity's index inside the enemy_entites array
- * @property {number} entity_index - The entity's index inside the entites array
- * @property {number} player_entity_index - The entity's index inside the player_entites array
- * @property {Entity} chasing_entity
- * @property {Object} chasing_action_and_context - The action attempted to perform while chasing
- * @property {Action} chasing_action_and_context.action - The action
- * @property {Context} chasing_action_and_context.context - The context
- * @property {number} attack_timer - in ticks since last attack
- * @property {Entity_Stats} base_stats
- * @property {Entity_Stats} stats
+ * @property {number} id
+ * @property {Entity_Type} entity_type
+ * @property {string} display_name
+ * 
+ * @property {number} x - x-cell position
+ * @property {number} y - y-cell position
+ * @property {number} next_x - tracks x of first path element
+ * @property {number} next_y - tracks y of first path element
+ * @property {Path} path - currently used path
  * @property {number} visual_x
  * @property {number} visual_y
+ * 
+ * @property {Array<On_Combat_Calback>} on_death
+ * @property {Array<On_Combat_Calback>} on_kill
+ * @property {Array<On_Combat_Calback>} on_scored_hit
+ * @property {Array<On_Combat_Calback} on_taken_hit
+ * 
+ * @property {number} entity_index - The entity's index inside the entites array
+ * @property {number} enemy_entity_index - The entity's index inside the enemy_entites array
+ * @property {number} player_entity_index - The entity's index inside the player_entites array
+ * 
+ * @property {Entity} chasing_entity - The entity being chased
+ * @property {Object} chasing_action_and_context - The action attempted to perform while chasing
+ * @property {Action} chasing_action_and_context.action
+ * @property {Context} chasing_action_and_context.context
+ * 
+ * @property {number} attack_timer - in ticks since last attack
+ * @property {Entity_Stats} base_stats - Used to calculate stats
+ * @property {Entity_Stats} stats - Actual stats being used during gameplay
  * @property {Inventory} equipped_items
  * @property {Inventory} inventory
  */
@@ -64,18 +68,18 @@ const Entity_Type = {
 
 /**
  * @typedef {Object} Path
- * @property {number} id - The unique identifier for the path.
- * @property {number} entity_index - The unique identifier for the entity associated with the path.
+ * @property {number} id
+ * @property {number} entity_index
  * @property {Array<Array>} path_steps - An array of positions representing the path.
- * @property {number} path_length - The length of the path.
- * @property {number} progress - The progress to the next point in the path.
+ * @property {number} path_length
+ * @property {number} progress - progress to the next point in the path. Between 0 and 1
  */
 
 /** 
  * @typedef {Object} Inventory
  * @property {Array<Equipment>} equipments
- * @property {number} slot_count - How many slots are inside the inventory
- * @property {Inventory_Type} type
+ * @property {number} slot_count
+ * @property {Inventory_Type} type Where the inventory should be displayed
  * @property {Entity} entity
  */
 
@@ -88,7 +92,7 @@ const Entity_Type = {
 /**
  * @callback Requirement
  * @param {Context} context
- * @returns {boolean} Whether the reuirement is met.
+ * @returns {boolean} Whether the requirement is met.
  */
 
 /**
@@ -136,11 +140,11 @@ const Entity_Type = {
  * @property {HTMLImageElement} image
  * @property {number} size
  * @property {number} duration
- * @property {number} time
+ * @property {number} time - passed time of duration
  * @property {Entity} entity
  * @property {number} x
  * @property {number} y
- * @property {number} peak_at
+ * @property {number} peak_at - percenvisibility peak
  */
 
 /**

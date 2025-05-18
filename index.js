@@ -435,7 +435,6 @@ chest_loot_table.forEach((entry) => {
 
 
 function roll_for_table(loot_table, table_sum) {
-    console.log('ROLL', table_sum, loot_table.length);
     let increment = 0;
     let result;
     const rolled_number = Math.floor(Math.random() * table_sum);
@@ -443,7 +442,6 @@ function roll_for_table(loot_table, table_sum) {
         const entry = loot_table[i];
         increment += entry[1];
         if (rolled_number < increment) {
-            console.log('rolled_number, inc', rolled_number, increment);
             return entry[0];
         };
     }
@@ -510,8 +508,6 @@ function calculate_entity_stats(entity) {
         //console.log("No entity on calculate stats!");
         return;
     }
-
-    console.log('c e s', entity);
 
     const hp_percent = entity?.stats?.current_hp / entity?.stats?.max_hp;
 
@@ -748,7 +744,6 @@ function load() {
     info_zone_boundaries = calculate_zone_boundaries(info_image, info_boundaries, info_margins);
     loaded = true;
 
-    console.log(amulet_image.src);
 }
 
 
@@ -1499,7 +1494,7 @@ function tick() {
                 }
 
             } else {
-                //console.log('blocked by entity', blocked_by_entity.id, entity.id);
+                console.log('blocked by entity', blocked_by_entity.id, entity.id);
 
                 if (entity.chasing_action_and_context && blocked_by_entity.entity_type != 'ENEMY')
                     take_action({ ...entity.chasing_action_and_context.context, target_entity: blocked_by_entity }, entity.chasing_action_and_context.action);
@@ -1557,12 +1552,14 @@ function tick() {
     const delete_length = entities_marked_for_delete.length;
     for (let i = delete_length - 1; i >= 0; i--) {
         const entity = entities_marked_for_delete[i];
-        //console.log('entity for delete', entity);
+        console.log('entity for delete', entity);
         entities[entity.entity_index] = undefined;
-        if (entity.enemy_entity_index) enemy_entities[entity.enemy_entity_index] = undefined;
-        if (entity.player_entity_index) player_entities[entity.player_entity_index] = undefined;
+        if (entity.enemy_entity_index != null) enemy_entities[entity.enemy_entity_index] = undefined;
+        if (entity.player_entity_index != null) player_entities[entity.player_entity_index] = undefined;
         if (player_entity == entity) player_entity = undefined;
+        if (entity_positions[entity.x][entity.y] == entity) entity_positions[entity.x][entity.y] = null;
         entities_marked_for_delete.pop();
+        console.log('entity delete after', enemy_entities, player_entities, entities);
     }
 
     tick_counter++;
