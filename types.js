@@ -47,6 +47,9 @@ const Entity_Type = {
  * @property {Entity_Stats} stats - Actual stats being used during gameplay
  * @property {Inventory} equipped_items
  * @property {Inventory} inventory
+ * @property {Action} basic_attack
+ * @property {Equipment} weapon
+ * @property {Array<Action>} actions
  */
 
 /**
@@ -57,6 +60,10 @@ const Entity_Type = {
  * @property {number} damage
  * @property {number} movement_speed
  * @property {number} armor
+ * @property {number} ranged_range_bonus
+ * @property {number} melee_range_bonus
+ * @property {number} max_mana
+ * @property {number} current_mana
  */
 
 /**
@@ -81,23 +88,38 @@ const Entity_Type = {
  * @property {number} slot_count
  * @property {Inventory_Type} type Where the inventory should be displayed
  * @property {Entity} entity
+ * @property {Map<Equipment_Type, number} equipment_type_limits
+ * @property {Map<Equipment_Type, number} equipment_type_counts
  */
 
 /**
  * @typedef {Object} Action
  * @property {Array<Requirement>} requirements
  * @property {Array<Effect_Function>} effect_functions
+ * @property {number} range
+ * @property {number} cooldown
+ * @property {number} cooldown_date - tick date of last use
+ * @property {HTMLImageElement} image
+ * @property {number} mana_cost
+ */
+
+/** 
+ * @callback Create_Action
+ * @param {numer} favour
+ * @returns {Action}
  */
 
 /**
  * @callback Requirement
  * @param {Context} context
+ * @param {Action} action
  * @returns {boolean} Whether the requirement is met.
  */
 
 /**
  * @callback Effect_Function
  * @param {Context} context
+ * @param {Action} action
  */
 
 /**
@@ -156,6 +178,7 @@ const Entity_Type = {
  * @property {HTMLImageElement} image
  * @property {number} id
  * @property {string} display_name
+ * @property {Action} action
  */
 
 /**
@@ -201,6 +224,16 @@ const Entity_Type = {
  * @property {Margins} zone_boundaries
  * @property {Equipment} equipment
  * @property {Inventory} inventory
+ */
+
+/**
+ * @typedef {Object} Action_Slot
+ * @property {number} x 
+ * @property {number} y
+ * @property {number} width
+ * @property {number} height
+ * @property {Margins} zone_boundaries
+ * @property {Action} action
  */
 
 /** 

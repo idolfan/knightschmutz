@@ -31,6 +31,8 @@ const chest_image = new Image();
 chest_image.src = './images/chest.png';
 const inventory_image = new Image();
 inventory_image.src = './images/inventory.png';
+const other_inventory_image = new Image();
+other_inventory_image.src = './images/other_inventory.png';
 const amulet_image = new Image();
 amulet_image.src = './images/amulet.png';
 const info_image = new Image();
@@ -40,6 +42,8 @@ slot_image.src = './images/slot.png';
 const slot_image_margin = 5 / 32;
 const equipped_slots_image = new Image();
 equipped_slots_image.src = './images/equipped_slots.png';
+const actions_slots_image = new Image();
+actions_slots_image.src = './images/actions_slots.png';
 
 //#endregion ------------------------------------------------------------------------------------------------------------------
 //#region ------------------------------------------------------------------ Constants ----------------------------------------
@@ -68,8 +72,7 @@ const Equipment_Type = {
     RING: 'RING',
     BRACELET: 'BRACELET',
     AMULET: 'AMULET',
-    MELEE_WEAPON: 'MELEE_WEAPON',
-    RANGED_WEAPON: 'RANGED_WEAPON',
+    WEAPON: 'WEAPON',
 };
 
 /**
@@ -134,7 +137,218 @@ let hovered_entity;
 let inventory_zones = [];
 
 
-//#endregion --------------------------------------------------------------------------------------------------------------------
+//#endregion ------------------------------------------------------------------------------------------------------------------
+//#region ------------------------------------------------------------------ Requirements -------------------------------------
+
+/** @type {Requirement} */
+const not_self_requirement = (context) => {
+    const not_self = context.source_entity != context.target_entity;
+    if (log_requirements) console.log('not_self', not_self);
+    return not_self;
+}
+
+/** @type {Requirement} */
+const attack_timer_up_requirement = (context) => {
+    const attack_timer_up = context.source_entity.attack_timer >= ticks_per_second / context.source_entity.stats.attack_speed;
+    if (log_requirements) console.log('attack_timer_up', attack_timer_up);
+    return attack_timer_up;
+}
+
+/** @type {Requirement} */
+const in_range_requirement = (context, action) => {
+    if (!context.source_entity || !context.target_entity) return false;
+    const in_range = get_distance(context) <= action.range;
+    if (log_requirements) console.log('in_range', in_range, get_distance(context), action);
+    return in_range;
+}
+
+/** @type {Requirement} */
+const cooldown_up_requirement = (context, action) => {
+    const cooldown_up = tick_counter - action.cooldown_date >= action.cooldown;
+    if (log_requirements) console.log('cooldown_up', cooldown_up);
+    return cooldown_up;
+}
+
+/** @type {Requirement} */
+const mana_available_requirement = (context, action) => {
+    const mana_available = context.target_entity.stats.current_mana >= action.mana_cost;
+    if (log_requirements) console.log('mana_available', mana_available);
+    return mana_available;
+}
+
+//#endregion ------------------------------------------------------------------------------------------------------------------
+//#region --------------------------------------------------------------------- Actions ---------------------------------------
+
+const log_requirements = false;
+
+/** 
+ * @returns Which requirement failed
+ * @type {(context: Context, action: Action) => Requirement} */
+function take_action(context, action) {
+    if (action.requirements) {
+        for (const requirement_callback of action.requirements) {
+            if (!requirement_callback(context, action)) return requirement_callback;
+        }
+    }
+
+    for (const effect_function of action.effect_functions) {
+        effect_function(context, action);
+    }
+
+    return null;
+}
+
+/** @type {(context: Context) => number} */
+function get_distance(context) {
+    return Math.sqrt((context.source_entity.x - context.target_entity.x)
+        * (context.source_entity.x - context.target_entity.x)
+        + (context.source_entity.y - context.target_entity.y)
+        * (context.source_entity.y - context.target_entity.y));
+}
+
+/** @type {Create_Action} */
+const melee_attack = (favour) => {
+    return {
+        requirements: [in_range_requirement, not_self_requirement, attack_timer_up_requirement],
+        effect_functions: [(context) => {
+            const combat_context = {
+                ...context,
+                damage: { amount: 5 }
+            }
+            damage_entity(combat_context);
+            context.source_entity.attack_timer = 0;
+        }],
+        range: 1.5
+    }
+}
+
+/** @type {Create_Action} */
+const bow_attack = (favour) => {
+    return {
+        requirements: [in_range_requirement, not_self_requirement, attack_timer_up_requirement],
+        effect_functions: [(context) => {
+            const combat_context = {
+                ...context,
+                damage: { amount: 2 }
+            }
+            context.source_entity.attack_timer = 0;
+            scheduled_callbacks.push({
+                callbacks: [
+                    (combat_context) => {
+                        damage_entity(combat_context);
+                    }
+                ],
+                contexts: [combat_context],
+                tick_date: tick_counter + ticks_per_second * 0.5,
+            })
+        }],
+        range: 7,
+    }
+}
+
+/** @type {Create_Action} */
+const heal_spell = (favour) => {
+    return {
+        requirements: [in_range_requirement, cooldown_up_requirement, mana_available_requirement],
+        effect_functions: [(context, action) => {
+            const combat_context = {
+                ...context,
+                damage: { amount: 5 }
+            }
+            action.cooldown_date = tick_counter;
+            context.source_entity.stats.current_mana -= action.mana_cost;
+            heal_entity(combat_context);
+        }],
+        cooldown: ticks_per_second * 10,
+        cooldown_date: tick_counter - ticks_per_second * 10,
+        image: heal_Image,
+        range: 10,
+        mana_cost: 10,
+    }
+}
+
+//#endregion ------------------------------------------------------------------------------------------------------------------
+//#region --------------------------------------------------------------- Element Positions -----------------------------------
+
+
+/** @type {Slot_Info} */
+const action_slot_info = {
+    image: slot_image,
+    zone_margin: [5 / 32, 5 / 32, 5 / 32, 5 / 32],
+    width: canvas.height / 12,
+    height: canvas.height / 12,
+    slot_distances: [10, 0],
+}
+
+const action_slots_boundaries = [canvas.width * 0.22, (1 - 0.18) * canvas.height, null, canvas.height];
+const action_slots_margins = [8 / 227, 8 / 30, 8 / 227, 8 / 30];
+let action_slots_zone_boundaries;
+
+const hud_hp_position = [
+    canvas.width * 0.01,
+    canvas.height - canvas.width * 0.01,
+    canvas.width * 0.20,
+    -canvas.width * 0.05
+]
+
+const hud_mana_position = [
+    canvas.width * 0.01,
+    canvas.height - canvas.width * 0.065,
+    canvas.width * 0.20,
+    -canvas.width * 0.05
+]
+
+const hud_actions_dimensions = [
+    canvas.width * 0.01,
+    canvas.height * 0.8,
+    canvas.height * 0.1,
+    canvas.height * 0.1
+]
+
+const inventory_margins = [1 / 11, 1 / 13, 1 / 11, 1 / 13];
+
+/** @type {Slot_Info} */
+const default_slot_info = {
+    image: slot_image,
+    zone_margin: [5 / 32, 5 / 32, 5 / 32, 5 / 32],
+    width: canvas.height / 11,
+    height: canvas.height / 11,
+    slot_distances: [10, 10]
+}
+
+const inv_width_percent = 0.348;
+const info_boundaries = [(0.5 - inv_width_percent / 2) * canvas.width, 0, (0.5 + inv_width_percent / 2) * canvas.width, null];
+const info_margins = [1 / 11, 1 / 13, 1 / 11, 1 / 13];
+let info_zone_boundaries;
+
+let loaded = false;
+
+setTimeout(load, 500);
+
+function load() {
+    inventory_zones = [
+        create_inventory_zone(player_entity.inventory, inventory_image,
+            [0, 0, inv_width_percent * canvas.width, null],
+            inventory_margins, default_slot_info),
+        create_inventory_zone(null, other_inventory_image,
+            [canvas.width * (1 - inv_width_percent), 0, canvas.width, null],
+            inventory_margins, default_slot_info),
+        create_inventory_zone(player_entity.equipped_items, equipped_slots_image,
+            [0,  (1 - 1/6.769) * canvas.height, null, canvas.height],
+            [5 / 313, 5 / 26, 5 / 313, 5 / 26], default_slot_info),
+    ]
+
+    info_zone_boundaries = calculate_zone_boundaries(info_image, info_boundaries, info_margins);
+    action_slots_zone_boundaries = calculate_zone_boundaries(actions_slots_image, action_slots_boundaries, action_slots_margins);
+
+    init_action_slots();
+
+    loaded = true;
+
+}
+
+
+//#endregion ---------------------------------------------------------------------------------------------------------------------
 //#region ------------------------------------------------------------------- Equipment ---------------------------------------
 
 /** @type {Create_Equipment} */
@@ -196,10 +410,11 @@ const test_sword_equipment = (favour = 0) => {
             attack_speed: 0.85 + 0.05 * Math.trunc(favour / 6 * Math.random()),
             damage: 1.2,
         },
-        type: Equipment_Type.MELEE_WEAPON,
+        type: Equipment_Type.WEAPON,
         image: sword_image,
         id: id_counter++,
         display_name: "Simple Sword",
+        action: melee_attack(),
     }
 }
 
@@ -213,12 +428,14 @@ const test_bow_equipment = (favour = 0) => {
             attack_speed: 1.3 + 0.05 * Math.trunc(favour / 6 * Math.random()),
             damage: 0.9
         },
-        type: Equipment_Type.RANGED_WEAPON,
+        type: Equipment_Type.WEAPON,
         image: bow_image,
         id: id_counter++,
         display_name: "Simple Bow",
+        action: bow_attack(),
     }
 }
+
 
 
 // #endregion -----------------------------------------------------------------------------------------------------------------
@@ -294,16 +511,34 @@ function init_slots(inventory_zone, inventory) {
     const slot_distances = slot_info.slot_distances;
     const slot_margins = slot_info.zone_margin;
 
+
     inventory_zone.slots = [];
     inventory_zone.inventory = inventory;
 
     let slot_index = 0;
     if (inventory) {
+
+        inventory.equipment_type_counts = new Map();
+        const equipped_type = inventory.type == Inventory_Type.EQUIPPED;
+
         for (let j = zone_boundaries[1]; j < zone_boundaries[3] - slot_height; j += slot_height + slot_distances[1]) {
             for (let i = zone_boundaries[0]; i < zone_boundaries[2] - slot_width; i += slot_width + slot_distances[0]) {
                 if (slot_index >= inventory.slot_count) break;
 
                 const equipment = inventory.equipments[slot_index];
+
+                // TODO: Move this where it belongs. Should be done seperate for every inventory, and every equipment
+                if (equipment) {
+                    const current_count = inventory.equipment_type_counts.get(equipment.type) || 0;
+                    inventory.equipment_type_counts.set(equipment.type, current_count + 1);
+
+                    if (equipped_type && equipment.type == Equipment_Type.WEAPON) {
+                        console.log('Basic attack set');
+                        inventory.entity.basic_attack = equipment.action;
+                        inventory.entity.weapon = equipment;
+                    }
+                }
+
 
                 /** @type {Slot} */
                 const slot = {
@@ -327,18 +562,82 @@ function init_slots(inventory_zone, inventory) {
     }
 }
 
+function init_action_slots() {
+    const slot_info = action_slot_info;
+    const zone_boundaries = action_slots_zone_boundaries;
+    const slot_width = slot_info.width;
+    const slot_height = slot_info.height;
+    const slot_distances = slot_info.slot_distances;
+    const slot_margins = slot_info.zone_margin;
+
+    let slot_index = 0;
+
+    action_slots.length = 0;
+
+    for (let j = zone_boundaries[1]; j < zone_boundaries[3] - slot_height; j += slot_height + slot_distances[1]) {
+        for (let i = zone_boundaries[0]; i < zone_boundaries[2] - slot_width; i += slot_width + slot_distances[0]) {
+            if (slot_index >= action_slots_count) break;
+
+            const action = player_entity.actions[slot_index];
+
+            /** @type {Action_Slot} */
+            const slot = {
+                x: i,
+                y: j,
+                width: slot_width,
+                height: slot_height,
+                action: action,
+                zone_boundaries: [
+                    i + slot_width * slot_margins[0],
+                    j + slot_height * slot_margins[1],
+                    i + slot_width * (1 - slot_margins[2]),
+                    j + slot_height * (1 - slot_margins[3])
+                ],
+            }
+
+            action_slots.push(slot);
+
+            slot_index++;
+        }
+    }
+}
+
 /** @type {(current_slot: Slot, new_slot: Slot, equipment: Equipment)} */
 function transfer_equipment(current_slot, new_slot, equipment) {
 
-    const current_inventory = current_slot.inventory;
-    const new_inventory = new_slot.inventory;
+    const current_inventory = current_slot?.inventory;
+    const new_inventory = new_slot?.inventory;
     const new_slot_equipment = new_slot?.equipment;
 
-    for (let i = 0; i < current_inventory.equipments.length; i++) {
-        const comparison_equipment = current_inventory.equipments[i];
-        if (comparison_equipment == equipment) {
-            current_inventory.equipments.splice(i, 1);
-            break;
+    const same = current_inventory == new_inventory;
+    const same_type = equipment.type == new_slot_equipment?.type;
+
+
+    if (!same && !same_type && new_inventory.equipment_type_limits) {
+        const count = new_inventory.equipment_type_counts.get(equipment.type) || 0;
+        const limit = new_inventory.equipment_type_limits.get(equipment.type);
+
+        const new_type_full = count >= limit;
+        if (new_type_full) return;
+    }
+
+    if (!same && !same_type && new_slot_equipment && current_inventory.equipment_type_limits) {
+        const count = current_inventory.equipment_type_counts.get(new_slot_equipment.type) || 0;
+        const limit = current_inventory.equipment_type_limits.get(new_slot_equipment.type);
+
+        const current_type_full = count >= limit;
+        if (current_type_full) return;
+    }
+
+    if (current_inventory) {
+        for (let i = 0; i < current_inventory.equipments.length; i++) {
+            const comparison_equipment = current_inventory.equipments[i];
+            if (comparison_equipment == equipment) {
+                current_inventory.equipments.splice(i, 1);
+                const count = current_inventory.equipment_type_counts.get(equipment.type);
+                current_inventory.equipment_type_counts.set(equipment.type, count - 1);
+                break;
+            }
         }
     }
 
@@ -347,6 +646,8 @@ function transfer_equipment(current_slot, new_slot, equipment) {
             const comparison_equipment = new_inventory.equipments[i];
             if (comparison_equipment == new_slot_equipment) {
                 new_inventory.equipments.splice(i, 1);
+                const count = new_inventory.equipment_type_counts.get(new_slot_equipment.type);
+                new_inventory.equipment_type_counts.set(new_slot_equipment.type, count - 1);
                 break;
             }
         }
@@ -354,19 +655,32 @@ function transfer_equipment(current_slot, new_slot, equipment) {
 
     if (new_inventory) {
         new_inventory.equipments.push(equipment);
+        const count = new_inventory.equipment_type_counts.get(equipment.type) || 0;
+        new_inventory.equipment_type_counts.set(equipment.type, count + 1);
     }
 
     if (new_slot_equipment) {
         current_inventory.equipments.push(new_slot_equipment);
+        const count = current_inventory.equipment_type_counts.get(new_slot_equipment.type) || 0;
+        current_inventory.equipment_type_counts.set(new_slot_equipment.type, count + 1);
     }
 
     new_slot.equipment = equipment;
     current_slot.equipment = new_slot_equipment;
 
+    if (new_inventory.type == Inventory_Type.EQUIPPED && equipment.type == Equipment_Type.WEAPON) {
+        new_inventory.entity.basic_attack = equipment.action;
+        new_inventory.entity.weapon = equipment;
+    }
+
+    if (new_slot_equipment && current_inventory.type == Inventory_Type.EQUIPPED && new_slot_equipment.type == Equipment_Type.WEAPON) {
+        current_inventory.entity.basic_attack = new_slot_equipment.action;
+        current_inventory.entity.weapon = new_slot_equipment;
+    }
+
     if (current_inventory.type == Inventory_Type.EQUIPPED || new_inventory.type == Inventory_Type.EQUIPPED) {
         calculate_entity_stats(current_inventory.entity);
-        if (current_inventory != new_inventory)
-            calculate_entity_stats(new_inventory.entity);
+        if (!same) calculate_entity_stats(new_inventory.entity);
     }
 }
 
@@ -480,13 +794,10 @@ const player = {
 add_player(player);
 player_entity = entities[player.entity_index];
 
-player_entity.on_kill.push((combat_context) => {
-    heal_entity({
-        source_entity: combat_context.target_entity,
-        target_entity: combat_context.source_entity,
-        damage: { amount: combat_context.source_entity.stats.max_hp * 0.25 }
-    })
-})
+/** @type {Array<Action_Slot>} */
+const action_slots = [];
+const action_slots_count = 9
+
 
 /** @type {Array<Entity>} */
 const start_entites = [
@@ -510,17 +821,18 @@ function calculate_entity_stats(entity) {
     }
 
     const hp_percent = entity?.stats?.current_hp / entity?.stats?.max_hp;
+    const mana_percent = entity?.stats?.current_mana / entity?.stats?.max_mana;
 
     entity.stats = { ...entity.base_stats }
     if (entity.equipped_items?.equipments && entity.equipped_items?.equipments.length != 0)
         entity.equipped_items.equipments.forEach((equipment) => {
             if (equipment.flat_stats)
                 Object.keys(equipment.flat_stats).forEach((key) => {
-                    entity.stats[key] += equipment.flat_stats[key];
+                    entity.stats[key] = (entity.stats[key] ?? 0) + equipment.flat_stats[key];
                 })
             if (equipment.multiplicative_stats)
                 Object.keys(equipment.multiplicative_stats).forEach((key) => {
-                    entity.stats[key] *= equipment.multiplicative_stats[key];
+                    entity.stats[key] = (entity.stats[key] ?? 1) * equipment.multiplicative_stats[key];
                 })
             if (equipment.extra_effects)
                 equipment.extra_effects.forEach((extra_effect) => {
@@ -528,7 +840,12 @@ function calculate_entity_stats(entity) {
                 })
         });
 
-    entity.stats.current_hp = entity.stats.max_hp * hp_percent;
+    if (entity?.stats?.current_hp) {
+        entity.stats.current_hp = entity.stats.max_hp * hp_percent;
+    }
+    if (entity?.stats?.current_mana) {
+        entity.stats.current_mana = entity.stats.max_mana * mana_percent;
+    }
 }
 
 /** @type {(entity: Entity) => Entity} */
@@ -536,6 +853,7 @@ function add_entity(entity) {
     entity.id = id_counter++;
 
     if (entity.base_stats?.max_hp) entity.base_stats.current_hp = entity.base_stats.max_hp;
+    if (entity.base_stats?.max_mana) entity.base_stats.current_mana = entity.base_stats.max_mana;
 
     if (entity.base_stats) entity.stats = { ...entity.base_stats };
 
@@ -566,12 +884,22 @@ function add_player(player) {
             attack_speed: 0.7,
             max_hp: 30,
             movement_speed: 5,
+            max_mana: 20,
         },
         attack_timer: ticks_per_second,
-        on_kill: [],
+        on_kill: [(combat_context) => {
+            heal_entity({
+                source_entity: combat_context.target_entity,
+                target_entity: combat_context.source_entity,
+                damage: { amount: combat_context.source_entity.stats.max_hp * 0.25 }
+            })
+        }],
         on_death: [],
         on_scored_hit: [],
         on_taken_hit: [],
+        actions: [
+            heal_spell(),
+        ]
     }
 
     const player_starting_equipment = [
@@ -581,12 +909,23 @@ function add_player(player) {
         test_sword_equipment(),
     ]
 
+    /** @type {Inventory} */
     const equipped_inventory = {
         equipments: player_starting_equipment,
         slot_count: 8,
         type: Inventory_Type.EQUIPPED,
         entity: player_entity,
+        equipment_type_limits: new Map([
+            [Equipment_Type.AMULET, 2],
+            [Equipment_Type.BRACELET, 1],
+            [Equipment_Type.CHESTPLATE, 1],
+            [Equipment_Type.HELMET, 1],
+            [Equipment_Type.WEAPON, 1],
+            [Equipment_Type.RING, 1],
+        ]),
     };
+
+    /** @type {Inventory} */
     const inventory = {
         equipments: [test_bow_equipment()],
         slot_count: 10,
@@ -700,54 +1039,6 @@ function entity_on_kill(combat_context) {
 
 
 //#endregion -------------------------------------------------------------------------------------------------------------------
-//#region --------------------------------------------------------------- Element Positions -----------------------------------
-const hud_position = [
-    canvas.width * 0.01,
-    canvas.height - canvas.width * 0.01,
-    canvas.width * 0.20,
-    -canvas.width * 0.05
-]
-
-const inventory_margins = [1 / 11, 1 / 13, 1 / 11, 1 / 13];
-
-/** @type {Slot_Info} */
-const default_slot_info = {
-    image: slot_image,
-    zone_margin: [5 / 32, 5 / 32, 5 / 32, 5 / 32],
-    width: canvas.height / 11,
-    height: canvas.height / 11,
-    slot_distances: [10, 10]
-}
-
-const inv_width_percent = 0.348;
-const info_boundaries = [(0.5 - inv_width_percent / 2) * canvas.width, 0, (0.5 + inv_width_percent / 2) * canvas.width, null];
-const info_margins = [1 / 11, 1 / 13, 1 / 11, 1 / 13];
-let info_zone_boundaries;
-
-let loaded = false;
-
-setTimeout(load, 500);
-
-function load() {
-    inventory_zones = [
-        create_inventory_zone(player_entity.inventory, inventory_image,
-            [0, 0, inv_width_percent * canvas.width, null],
-            inventory_margins, default_slot_info),
-        create_inventory_zone(null, inventory_image,
-            [canvas.width * (1 - inv_width_percent), 0, canvas.width, null],
-            inventory_margins, default_slot_info),
-        create_inventory_zone(player_entity.equipped_items, equipped_slots_image,
-            [0, (1 - 0.235) * canvas.height, null, canvas.height],
-            [8 / 227, 8 / 30, 8 / 227, 8 / 30], default_slot_info),
-    ]
-
-    info_zone_boundaries = calculate_zone_boundaries(info_image, info_boundaries, info_margins);
-    loaded = true;
-
-}
-
-
-//#endregion ---------------------------------------------------------------------------------------------------------------------
 //#region -------------------------------------------------------------------- Render -----------------------------------------
 
 let cell_size = /* 320; */ 40;
@@ -946,15 +1237,27 @@ function draw() {
     ctx.translate(-translation[0], -translation[1]);
 
     // HUD
+    // HP
     const hp_percent = player_entity ? Math.max(0, player_entity.stats.current_hp / player_entity.stats.max_hp) : 0;
     ctx.fillStyle = 'gray';
-    ctx.fillRect(hud_position[0], hud_position[1], hud_position[2], hud_position[3]);
+    ctx.fillRect(hud_hp_position[0], hud_hp_position[1], hud_hp_position[2], hud_hp_position[3]);
     ctx.fillStyle = 'red';
-    const hp_hud_thickness = hud_position[2] / 16;
-    ctx.fillRect(hud_position[0] + hp_hud_thickness, hud_position[1],
-        (hud_position[2] - hp_hud_thickness * 2) * hp_percent, hud_position[3]);
-    ctx.drawImage(hp_hud_Image, hud_position[0], hud_position[1], hud_position[2], hud_position[3]);
+    const hp_hud_thickness = hud_hp_position[2] / 16;
+    ctx.fillRect(hud_hp_position[0] + hp_hud_thickness, hud_hp_position[1],
+        (hud_hp_position[2] - hp_hud_thickness * 2) * hp_percent, hud_hp_position[3]);
+    ctx.drawImage(hp_hud_Image, hud_hp_position[0], hud_hp_position[1], hud_hp_position[2], hud_hp_position[3]);
 
+    // Mana
+    const mana_percent = player_entity ? Math.max(0, player_entity.stats.current_mana / player_entity.stats.max_mana) : 0;
+    ctx.fillStyle = 'gray';
+    ctx.fillRect(hud_mana_position[0], hud_mana_position[1], hud_mana_position[2], hud_mana_position[3]);
+    ctx.fillStyle = 'blue';
+    const mana_hud_thickness = hud_mana_position[2] / 16;
+    ctx.fillRect(hud_mana_position[0] + hp_hud_thickness, hud_mana_position[1],
+        (hud_mana_position[2] - hp_hud_thickness * 2) * mana_percent, hud_mana_position[3]);
+    ctx.drawImage(hp_hud_Image, hud_mana_position[0], hud_mana_position[1], hud_mana_position[2], hud_mana_position[3]);
+
+    // HP & Mana numbers
     if (player_entity) {
         ctx.font = '20px "Press Start 2P"';
         ctx.fillStyle = '#00FF00';
@@ -962,7 +1265,45 @@ function draw() {
         ctx.textBaseline = 'middle';
         ctx.fillText(
             `${player_entity.stats.current_hp.toFixed(0)} / ${player_entity.stats.max_hp.toFixed(0)}`,
-            hud_position[0] + hud_position[2] / 2, hud_position[1] + hud_position[3] / 2);
+            hud_hp_position[0] + hud_hp_position[2] / 2, hud_hp_position[1] + hud_hp_position[3] / 2);
+
+        ctx.fillText(
+            `${player_entity.stats.current_mana.toFixed(0)} / ${player_entity.stats.max_mana.toFixed(0)}`,
+            hud_mana_position[0] + hud_mana_position[2] / 2, hud_mana_position[1] + hud_mana_position[3] / 2);
+    }
+
+    // Attack timer
+    ctx.fillStyle = 'black';
+    if (player_entity.weapon) {
+        ctx.drawImage(player_entity.weapon.image, hud_actions_dimensions[0],
+            hud_actions_dimensions[1],
+            hud_actions_dimensions[2],
+            -hud_actions_dimensions[3],
+        )
+        ctx.fillStyle = 'rgb(0,0,0,0.7';
+        const attack_percent = 1 - Math.min(1, player_entity.stats.attack_speed * player_entity.attack_timer / ticks_per_second);
+        ctx.fillRect(hud_actions_dimensions[0],
+            hud_actions_dimensions[1],
+            hud_actions_dimensions[2],
+            -hud_actions_dimensions[3] * attack_percent,
+        )
+    }
+
+    // Action Slots
+    ctx.fillStyle = 'rgb(0,0,0,0.7)'
+    if (!inventory_zones[2].visible) {
+        draw_image_boundaries(actions_slots_image, action_slots_boundaries);
+
+        for (let i = 0; i < action_slots.length; i++) {
+            const slot = action_slots[i];
+            ctx.drawImage(action_slot_info.image, slot.x, slot.y, slot.width, slot.height);
+            if (slot.action?.image) {
+                const b = slot.zone_boundaries;
+                draw_image_boundaries(slot.action.image, b);
+                const cooldown_percent = 1 - Math.min(1, (tick_counter - slot.action.cooldown_date) / slot.action.cooldown);
+                ctx.fillRect(b[0], b[3], b[2] - b[0], - (b[3] - b[1]) * cooldown_percent);
+            }
+        }
     }
 
     // Inventory
@@ -1125,6 +1466,14 @@ const keys_typed = {
     left_mouse_button: false,
     right_mouse_button: false,
     e: false,
+    "1": false,
+    "2": false,
+    "4": false,
+    "5": false,
+    "6": false,
+    "7": false,
+    "8": false,
+    "9": false,
 }
 
 function updateCamera() {
@@ -1240,9 +1589,9 @@ function handle_inputs() {
         if (!target_entity) break right_mouse_button;
         const context = { target_entity, source_entity: player_entity }
         //if (get_distance(context) >= 1.5) {
-        chase_entity(player_entity, target_entity, melee_attack);
+        chase_entity(player_entity, target_entity, player_entity.basic_attack);
         //}
-        take_action(context, melee_attack);
+        //take_action(context, player_entity.basic_attack);
     }
 
     if (keys_typed.e) {
@@ -1272,6 +1621,19 @@ function handle_inputs() {
         }
 
 
+    }
+
+    // 1 -9
+    for (let i = 1; i <= 9; i++) {
+        if (keys_typed[i]) {
+            keys_typed[i] = false;
+            const action = action_slots[i - 1].action;
+            const target_entity = hovered_entity;
+            const context = { target_entity, source_entity: player_entity }
+            if (action) {
+                take_action(context, action);
+            }
+        }
     }
 }
 
@@ -1303,12 +1665,14 @@ window.addEventListener('keydown', (event) => {
             keys_typed.e = true;
             break;
         default:
-            console.log('Key pressed:', key);
+            keys_pressed[key.toLowerCase()] = true;
+            keys_typed[key.toLowerCase()] = true;
     }
 });
 
 window.addEventListener('keyup', (event) => {
     const key = event.key;
+    keys_pressed[key.toLowerCase()] = false;
     switch (key.toLowerCase()) {
         case 'w':
             keys_pressed.w = false;
@@ -1328,6 +1692,9 @@ window.addEventListener('keyup', (event) => {
         case ' ':
             keys_pressed.space = false;
             break;
+        default:
+            keys_pressed[key.toLowerCase()] = false;
+            keys_typed[key.toLowerCase()] = false;
     }
 });
 
@@ -1439,10 +1806,9 @@ function tick() {
         const scheduled_callback = scheduled_callbacks[i];
         if (tick_counter != scheduled_callback.tick_date) continue;
 
-        for (let j = 0; j < scheduled_callback.callbacks; j++) {
+        for (let j = 0; j < scheduled_callback.callbacks.length; j++) {
             const callback = scheduled_callback.callbacks[j];
             const context = scheduled_callback.contexts.length - 1 >= j ? scheduled_callback.contexts[j] : scheduled_callback.contexts[0];
-
             callback(context);
         }
 
@@ -1463,7 +1829,7 @@ function tick() {
         let chasing_needs_pathing = true;
         if (entity.chasing_action_and_context) {
             const requirement_failed = take_action(entity.chasing_action_and_context.context, entity.chasing_action_and_context.action)
-            if (requirement_failed != in_melee_range_requirement) chasing_needs_pathing = false;
+            if (requirement_failed != in_range_requirement) chasing_needs_pathing = false;
         }
 
         if (entity.chasing_entity && chasing_needs_pathing) {
@@ -1494,7 +1860,7 @@ function tick() {
                 }
 
             } else {
-                console.log('blocked by entity', blocked_by_entity.id, entity.id);
+                // console.log('blocked by entity', blocked_by_entity.id, entity.id);
 
                 if (entity.chasing_action_and_context && blocked_by_entity.entity_type != 'ENEMY')
                     take_action({ ...entity.chasing_action_and_context.context, target_entity: blocked_by_entity }, entity.chasing_action_and_context.action);
@@ -1535,7 +1901,7 @@ function tick() {
             const distance_to_closest_player = distance_to_players[closest_player_index];
             if (distance_to_closest_player < 10) {
 
-                chase_entity(entity, closest_player_entity, melee_attack);
+                chase_entity(entity, closest_player_entity, melee_attack());
             }
         }
 
@@ -1552,14 +1918,13 @@ function tick() {
     const delete_length = entities_marked_for_delete.length;
     for (let i = delete_length - 1; i >= 0; i--) {
         const entity = entities_marked_for_delete[i];
-        console.log('entity for delete', entity);
+        //console.log('entity for delete', entity);
         entities[entity.entity_index] = undefined;
         if (entity.enemy_entity_index != null) enemy_entities[entity.enemy_entity_index] = undefined;
         if (entity.player_entity_index != null) player_entities[entity.player_entity_index] = undefined;
         if (player_entity == entity) player_entity = undefined;
         if (entity_positions[entity.x][entity.y] == entity) entity_positions[entity.x][entity.y] = null;
         entities_marked_for_delete.pop();
-        console.log('entity delete after', enemy_entities, player_entities, entities);
     }
 
     tick_counter++;
@@ -1665,69 +2030,3 @@ function chase_entity(source_entity, target_entity, action) {
 }
 
 //#endregion ----------------------------------------------------------------------------------------------------------------
-//#region ------------------------------------------------------------------ Requirements -------------------------------------
-/** @type {Requirement} */
-const in_melee_range_requirement = (context) => {
-    const in_range = get_distance(context) <= 1.5;
-    if (log_requirements) console.log('in_melee_range', in_range);
-    return in_range;
-}
-
-/** @type {Requirement} */
-const not_self_requirement = (context) => {
-    const not_self = context.source_entity != context.target_entity;
-    if (log_requirements) console.log('not_self', not_self);
-    return not_self;
-}
-
-/** @type {Requirement} */
-const attack_timer_up_requirement = (context) => {
-    const attack_timer_up = context.source_entity.attack_timer >= ticks_per_second / context.source_entity.stats.attack_speed;
-    if (log_requirements) console.log('attack_timer_up', attack_timer_up);
-    return attack_timer_up;
-}
-
-//#endregion ------------------------------------------------------------------------------------------------------------------
-//#region --------------------------------------------------------------------- Actions ---------------------------------------
-
-const log_requirements = false;
-
-/** 
- * @returns Which requirement failed
- * @type {(context: Context, action: Action) => Requirement} */
-function take_action(context, action) {
-    if (action.requirements) {
-        for (const requirement_callback of action.requirements) {
-            if (!requirement_callback(context)) return requirement_callback;
-        }
-    }
-
-    for (const effect_function of action.effect_functions) {
-        effect_function(context);
-    }
-
-    return null;
-}
-
-/** @type {(context: Context) => number} */
-function get_distance(context) {
-    return Math.sqrt((context.source_entity.x - context.target_entity.x)
-        * (context.source_entity.x - context.target_entity.x)
-        + (context.source_entity.y - context.target_entity.y)
-        * (context.source_entity.y - context.target_entity.y));
-}
-
-/** @type {Action} */
-const melee_attack = {
-    requirements: [in_melee_range_requirement, not_self_requirement, attack_timer_up_requirement],
-    effect_functions: [(context) => {
-        const combat_context = {
-            ...context,
-            damage: { amount: 5 }
-        }
-        damage_entity(combat_context);
-        context.source_entity.attack_timer = 0;
-    }]
-}
-
-//#endregion --------------------------------------------------------------------------------------------------------------
