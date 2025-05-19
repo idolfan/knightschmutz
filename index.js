@@ -44,6 +44,14 @@ const equipped_slots_image = new Image();
 equipped_slots_image.src = './images/equipped_slots.png';
 const actions_slots_image = new Image();
 actions_slots_image.src = './images/actions_slots.png';
+const hp_bar_image = new Image();
+hp_bar_image.src = './images/hp_bar.png';
+const mana_bar_image = new Image();
+mana_bar_image.src = './images/mana_bar.png';
+const hammer_image = new Image();
+hammer_image.src = './images/hammer.png';
+const rock_image = new Image();
+rock_image.src = './images/rock.png';
 
 //#endregion ------------------------------------------------------------------------------------------------------------------
 //#region ------------------------------------------------------------------ Constants ----------------------------------------
@@ -132,6 +140,8 @@ let opened_equipped_inventory;
 
 /** @type {Entity} */
 let hovered_entity;
+/** @type {[x: number, y: number]} */
+let hovered_cell;
 
 /** @type {Array<Inventory_Zone} */
 let inventory_zones = [];
@@ -163,6 +173,16 @@ const in_range_requirement = (context, action) => {
 }
 
 /** @type {Requirement} */
+const is_adjacent_cell_requirement = (context, action) => {
+    const x_distance = Math.abs(context.source_entity.x - context.target_cell[0]);
+    const y_distance = Math.abs(context.source_entity.y - context.target_cell[1]);
+
+    const is_adjacent_cell = x_distance + y_distance <= 1;
+    if (log_requirements) console.log('is_adjacen_cell', is_adjacent_cell);
+    return is_adjacent_cell;
+}
+
+/** @type {Requirement} */
 const cooldown_up_requirement = (context, action) => {
     const cooldown_up = tick_counter - action.cooldown_date >= action.cooldown;
     if (log_requirements) console.log('cooldown_up', cooldown_up);
@@ -171,7 +191,7 @@ const cooldown_up_requirement = (context, action) => {
 
 /** @type {Requirement} */
 const mana_available_requirement = (context, action) => {
-    const mana_available = context.target_entity.stats.current_mana >= action.mana_cost;
+    const mana_available = context.source_entity.stats.current_mana >= action.mana_cost;
     if (log_requirements) console.log('mana_available', mana_available);
     return mana_available;
 }
@@ -185,14 +205,15 @@ const log_requirements = false;
  * @returns Which requirement failed
  * @type {(context: Context, action: Action) => Requirement} */
 function take_action(context, action) {
+    const full_context = { target_cell: [...hovered_cell], ...context };
     if (action.requirements) {
         for (const requirement_callback of action.requirements) {
-            if (!requirement_callback(context, action)) return requirement_callback;
+            if (!requirement_callback(full_context, action)) return requirement_callback;
         }
     }
 
     for (const effect_function of action.effect_functions) {
-        effect_function(context, action);
+        effect_function(full_context, action);
     }
 
     return null;
@@ -267,6 +288,40 @@ const heal_spell = (favour) => {
     }
 }
 
+/** @type {Create_Action} */
+const hammer_spell = (favour) => {
+    return {
+        requirements: [is_adjacent_cell_requirement, cooldown_up_requirement, mana_available_requirement],
+        effect_functions: [(context, action) => {
+            const target_cell = context.target_cell;
+            area_board[target_cell[0]][target_cell[1]] = 0;
+            action.cooldown_date = tick_counter;
+            context.source_entity.stats.current_mana -= action.mana_cost;
+        }],
+        cooldown: ticks_per_second * 4,
+        cooldown_date: tick_counter - ticks_per_second * 4,
+        image: hammer_image,
+        mana_cost: 5,
+    }
+}
+
+/** @type {Create_Action} */
+const construct_spell = (favour) => {
+    return {
+        requirements: [is_adjacent_cell_requirement, cooldown_up_requirement, mana_available_requirement],
+        effect_functions: [(context, action) => {
+            const target_cell = context.target_cell;
+            area_board[target_cell[0]][target_cell[1]] = 1;
+            action.cooldown_date = tick_counter;
+            context.source_entity.stats.current_mana -= action.mana_cost;
+        }],
+        cooldown: ticks_per_second * 10,
+        cooldown_date: tick_counter - ticks_per_second * 10,
+        image: rock_image,
+        mana_cost: 15,
+    }
+}
+
 //#endregion ------------------------------------------------------------------------------------------------------------------
 //#region --------------------------------------------------------------- Element Positions -----------------------------------
 
@@ -284,23 +339,30 @@ const action_slots_boundaries = [canvas.width * 0.22, (1 - 0.18) * canvas.height
 const action_slots_margins = [8 / 227, 8 / 30, 8 / 227, 8 / 30];
 let action_slots_zone_boundaries;
 
-const hud_hp_position = [
+const hud_mana_position = [
     canvas.width * 0.01,
-    canvas.height - canvas.width * 0.01,
+    canvas.height - canvas.width * 0.06,
     canvas.width * 0.20,
-    -canvas.width * 0.05
+    canvas.width * 0.05
 ]
 
-const hud_mana_position = [
+const hud_hp_position = [
     canvas.width * 0.01,
     canvas.height - canvas.width * 0.065,
     canvas.width * 0.20,
     -canvas.width * 0.05
 ]
 
-const hud_actions_dimensions = [
+const hud_hp_margins = [
+    5 / 105, 5 / 26, 5 / 105, 5 / 26
+]
+
+let hud_hp_boundaries;
+let hud_mana_boundaries;
+
+const hud_weapon_dimensions = [
     canvas.width * 0.01,
-    canvas.height * 0.8,
+    canvas.height * 0.75,
     canvas.height * 0.1,
     canvas.height * 0.1
 ]
@@ -316,7 +378,7 @@ const default_slot_info = {
     slot_distances: [10, 10]
 }
 
-const inv_width_percent = 0.348;
+const inv_width_percent = 0.338;
 const info_boundaries = [(0.5 - inv_width_percent / 2) * canvas.width, 0, (0.5 + inv_width_percent / 2) * canvas.width, null];
 const info_margins = [1 / 11, 1 / 13, 1 / 11, 1 / 13];
 let info_zone_boundaries;
@@ -334,7 +396,7 @@ function load() {
             [canvas.width * (1 - inv_width_percent), 0, canvas.width, null],
             inventory_margins, default_slot_info),
         create_inventory_zone(player_entity.equipped_items, equipped_slots_image,
-            [0,  (1 - 1/6.769) * canvas.height, null, canvas.height],
+            [0, (1 - 1 / 6.769) * canvas.height, null, canvas.height],
             [5 / 313, 5 / 26, 5 / 313, 5 / 26], default_slot_info),
     ]
 
@@ -899,6 +961,8 @@ function add_player(player) {
         on_taken_hit: [],
         actions: [
             heal_spell(),
+            hammer_spell(),
+            construct_spell(),
         ]
     }
 
@@ -1062,7 +1126,7 @@ function draw() {
     time_since_entity_hovered += 1;
 
     const translation = [-camera_origin[0] * zoom + (canvas.width / 2), -camera_origin[1] * zoom + canvas.height / 2];
-    let hovered_cell = [
+    hovered_cell = [
         Math.floor((mouse_position[0] - translation[0]) / cell_size),
         Math.floor((mouse_position[1] - translation[1]) / cell_size)
     ]
@@ -1238,24 +1302,42 @@ function draw() {
 
     // HUD
     // HP
-    const hp_percent = player_entity ? Math.max(0, player_entity.stats.current_hp / player_entity.stats.max_hp) : 0;
-    ctx.fillStyle = 'gray';
-    ctx.fillRect(hud_hp_position[0], hud_hp_position[1], hud_hp_position[2], hud_hp_position[3]);
-    ctx.fillStyle = 'red';
-    const hp_hud_thickness = hud_hp_position[2] / 16;
-    ctx.fillRect(hud_hp_position[0] + hp_hud_thickness, hud_hp_position[1],
-        (hud_hp_position[2] - hp_hud_thickness * 2) * hp_percent, hud_hp_position[3]);
-    ctx.drawImage(hp_hud_Image, hud_hp_position[0], hud_hp_position[1], hud_hp_position[2], hud_hp_position[3]);
+    {
+        const position = hud_hp_position;
+        const margins = hud_hp_margins;
+        const width = position[2];
+        const height = position[3];
 
-    // Mana
-    const mana_percent = player_entity ? Math.max(0, player_entity.stats.current_mana / player_entity.stats.max_mana) : 0;
-    ctx.fillStyle = 'gray';
-    ctx.fillRect(hud_mana_position[0], hud_mana_position[1], hud_mana_position[2], hud_mana_position[3]);
-    ctx.fillStyle = 'blue';
-    const mana_hud_thickness = hud_mana_position[2] / 16;
-    ctx.fillRect(hud_mana_position[0] + hp_hud_thickness, hud_mana_position[1],
-        (hud_mana_position[2] - hp_hud_thickness * 2) * mana_percent, hud_mana_position[3]);
-    ctx.drawImage(hp_hud_Image, hud_mana_position[0], hud_mana_position[1], hud_mana_position[2], hud_mana_position[3]);
+        const hp_percent = 1 - (player_entity ? Math.max(0, player_entity.stats.current_hp / player_entity.stats.max_hp) : 0);
+
+        draw_image_dimensions(hp_bar_image, position);
+
+        ctx.fillStyle = 'rgb(0,0,0,0.7)';
+        ctx.fillRect((position[0] + (1 - margins[2]) * width),
+            position[1] + margins[1] * height,
+            - width * (1 - margins[0] - margins[2]) * hp_percent,
+            height * (1 - margins[1] - margins[3]));
+
+    }
+
+    {
+        const position = hud_mana_position;
+        const margins = hud_hp_margins;
+        const width = position[2];
+        const height = position[3];
+
+        const mana_percent = 1 - (player_entity ? Math.max(0, player_entity.stats.current_mana / player_entity.stats.max_mana) : 0);
+
+        draw_image_dimensions(mana_bar_image, position);
+
+        ctx.fillStyle = 'rgb(0,0,0,0.7)';
+        ctx.fillRect((position[0] + (1 - margins[2]) * width),
+            position[1] + margins[1] * height,
+            - width * (1 - margins[0] - margins[2]) * mana_percent,
+            height * (1 - margins[1] - margins[3]));
+
+    }
+
 
     // HP & Mana numbers
     if (player_entity) {
@@ -1275,17 +1357,17 @@ function draw() {
     // Attack timer
     ctx.fillStyle = 'black';
     if (player_entity.weapon) {
-        ctx.drawImage(player_entity.weapon.image, hud_actions_dimensions[0],
-            hud_actions_dimensions[1],
-            hud_actions_dimensions[2],
-            -hud_actions_dimensions[3],
+        ctx.drawImage(player_entity.weapon.image, hud_weapon_dimensions[0],
+            hud_weapon_dimensions[1],
+            hud_weapon_dimensions[2],
+            -hud_weapon_dimensions[3],
         )
         ctx.fillStyle = 'rgb(0,0,0,0.7';
         const attack_percent = 1 - Math.min(1, player_entity.stats.attack_speed * player_entity.attack_timer / ticks_per_second);
-        ctx.fillRect(hud_actions_dimensions[0],
-            hud_actions_dimensions[1],
-            hud_actions_dimensions[2],
-            -hud_actions_dimensions[3] * attack_percent,
+        ctx.fillRect(hud_weapon_dimensions[0],
+            hud_weapon_dimensions[1],
+            hud_weapon_dimensions[2],
+            -hud_weapon_dimensions[3] * attack_percent,
         )
     }
 
@@ -1391,6 +1473,42 @@ function draw() {
             }
 
         }
+
+        // Player stats
+
+        ctx.font = '30px "Press Start 2P"';
+        ctx.fillStyle = '#00FF00';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.font = '20px "Press Start 2P"';
+
+        let line_height = info_zone_boundaries[3];
+
+        const stats_keys = Object.keys(player_entity.stats);
+        const strings = {};
+        stats_keys.forEach((key) => {
+            const value = player_entity.stats[key];
+            if (!strings[key] && Stat_Display_Names[key] != null) {
+                strings[key] = "" + (Stat_Display_Names[key]) + ": "
+                strings[key] += value.toFixed(1);
+            }
+        })
+
+        const str_keys = Object.keys(strings);
+        for (let i = 0; i < str_keys.length; i++) {
+            const str = strings[str_keys[i]];
+            if (str)
+                ctx.fillText(str, info_zone_boundaries[0], line_height, info_zone_boundaries[2] - info_zone_boundaries[0]);
+            line_height -= 30
+        }
+
+        ctx.font = '30px "Press Start 2P"';
+
+        line_height -= 10;
+        ctx.fillText("----------------------------------", info_zone_boundaries[0], line_height, info_zone_boundaries[2] - info_zone_boundaries[0]);
+        line_height -= 40;
+        ctx.fillText("Player stats", info_zone_boundaries[0], line_height, info_zone_boundaries[2] - info_zone_boundaries[0]);
+
     }
 
 

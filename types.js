@@ -126,6 +126,7 @@ const Entity_Type = {
  * @typedef {Object} Context
  * @property {Entity} source_entity
  * @property {Entity} target_entity
+ * @property {[x: number, y: number]} target_cell
  */
 
 /**
