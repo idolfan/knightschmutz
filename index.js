@@ -219,6 +219,11 @@ function take_action(context, action) {
     return null;
 }
 
+/** @type {Effect_Function} */
+const cost_mana = (context, action) => {
+    spend_mana(context.source_entity, action.mana_cost);
+}
+
 /** @type {(context: Context) => number} */
 function get_distance(context) {
     return Math.sqrt((context.source_entity.x - context.target_entity.x)
@@ -271,15 +276,15 @@ const bow_attack = (favour) => {
 const heal_spell = (favour) => {
     return {
         requirements: [in_range_requirement, cooldown_up_requirement, mana_available_requirement],
-        effect_functions: [(context, action) => {
-            const combat_context = {
-                ...context,
-                damage: { amount: 5 }
-            }
-            action.cooldown_date = tick_counter;
-            context.source_entity.stats.current_mana -= action.mana_cost;
-            heal_entity(combat_context);
-        }],
+        effect_functions: [cost_mana,
+            (context, action) => {
+                const combat_context = {
+                    ...context,
+                    damage: { amount: 5 }
+                }
+                action.cooldown_date = tick_counter;
+                heal_entity(combat_context);
+            }],
         cooldown: ticks_per_second * 10,
         cooldown_date: tick_counter - ticks_per_second * 10,
         image: heal_Image,
@@ -292,12 +297,12 @@ const heal_spell = (favour) => {
 const hammer_spell = (favour) => {
     return {
         requirements: [is_adjacent_cell_requirement, cooldown_up_requirement, mana_available_requirement],
-        effect_functions: [(context, action) => {
-            const target_cell = context.target_cell;
-            area_board[target_cell[0]][target_cell[1]] = 0;
-            action.cooldown_date = tick_counter;
-            context.source_entity.stats.current_mana -= action.mana_cost;
-        }],
+        effect_functions: [cost_mana,
+            (context, action) => {
+                const target_cell = context.target_cell;
+                area_board[target_cell[0]][target_cell[1]] = 0;
+                action.cooldown_date = tick_counter;
+            }],
         cooldown: ticks_per_second * 4,
         cooldown_date: tick_counter - ticks_per_second * 4,
         image: hammer_image,
@@ -309,12 +314,12 @@ const hammer_spell = (favour) => {
 const construct_spell = (favour) => {
     return {
         requirements: [is_adjacent_cell_requirement, cooldown_up_requirement, mana_available_requirement],
-        effect_functions: [(context, action) => {
-            const target_cell = context.target_cell;
-            area_board[target_cell[0]][target_cell[1]] = 1;
-            action.cooldown_date = tick_counter;
-            context.source_entity.stats.current_mana -= action.mana_cost;
-        }],
+        effect_functions: [cost_mana,
+            (context, action) => {
+                const target_cell = context.target_cell;
+                area_board[target_cell[0]][target_cell[1]] = 1;
+                action.cooldown_date = tick_counter;
+            }],
         cooldown: ticks_per_second * 10,
         cooldown_date: tick_counter - ticks_per_second * 10,
         image: rock_image,
@@ -334,6 +339,14 @@ const action_slot_info = {
     height: canvas.height / 12,
     slot_distances: [10, 0],
 }
+
+
+const hud_weapon_dimensions = [
+    canvas.width * 0.01,
+    canvas.height * 0.75,
+    canvas.height * 0.1,
+    -canvas.height * 0.1
+]
 
 const action_slots_boundaries = [canvas.width * 0.22, (1 - 0.18) * canvas.height, null, canvas.height];
 const action_slots_margins = [8 / 227, 8 / 30, 8 / 227, 8 / 30];
@@ -359,13 +372,6 @@ const hud_hp_margins = [
 
 let hud_hp_boundaries;
 let hud_mana_boundaries;
-
-const hud_weapon_dimensions = [
-    canvas.width * 0.01,
-    canvas.height * 0.75,
-    canvas.height * 0.1,
-    canvas.height * 0.1
-]
 
 const inventory_margins = [1 / 11, 1 / 13, 1 / 11, 1 / 13];
 
@@ -611,6 +617,7 @@ function init_slots(inventory_zone, inventory) {
                     equipment: equipment,
                     inventory: inventory,
                     inventory_zone: inventory_zone,
+                    index: slot_index,
                     zone_boundaries: [
                         i + slot_width * slot_margins[0],
                         j + slot_height * slot_margins[1], i + slot_width * (1 - slot_margins[2]), j + slot_height * (1 - slot_margins[3])],
@@ -674,7 +681,7 @@ function transfer_equipment(current_slot, new_slot, equipment) {
     const same = current_inventory == new_inventory;
     const same_type = equipment.type == new_slot_equipment?.type;
 
-
+    // Item type Counts
     if (!same && !same_type && new_inventory.equipment_type_limits) {
         const count = new_inventory.equipment_type_counts.get(equipment.type) || 0;
         const limit = new_inventory.equipment_type_limits.get(equipment.type);
@@ -691,11 +698,14 @@ function transfer_equipment(current_slot, new_slot, equipment) {
         if (current_type_full) return;
     }
 
+    let current_index;
+
+    // Remove from inventories & lower counts
     if (current_inventory) {
-        for (let i = 0; i < current_inventory.equipments.length; i++) {
-            const comparison_equipment = current_inventory.equipments[i];
+        for (current_index = 0; current_index < current_inventory.equipments.length; current_index++) {
+            const comparison_equipment = current_inventory.equipments[current_index];
             if (comparison_equipment == equipment) {
-                current_inventory.equipments.splice(i, 1);
+                current_inventory.equipments.splice(current_index, 1);
                 const count = current_inventory.equipment_type_counts.get(equipment.type);
                 current_inventory.equipment_type_counts.set(equipment.type, count - 1);
                 break;
@@ -703,11 +713,13 @@ function transfer_equipment(current_slot, new_slot, equipment) {
         }
     }
 
+    let new_index = new_inventory.equipments.length;
+
     if (new_slot_equipment) {
-        for (let i = 0; i < new_inventory.equipments.length; i++) {
-            const comparison_equipment = new_inventory.equipments[i];
+        for (new_index = 0; new_index < new_inventory.equipments.length; new_index++) {
+            const comparison_equipment = new_inventory.equipments[new_index];
             if (comparison_equipment == new_slot_equipment) {
-                new_inventory.equipments.splice(i, 1);
+                new_inventory.equipments.splice(new_index, 1);
                 const count = new_inventory.equipment_type_counts.get(new_slot_equipment.type);
                 new_inventory.equipment_type_counts.set(new_slot_equipment.type, count - 1);
                 break;
@@ -715,14 +727,15 @@ function transfer_equipment(current_slot, new_slot, equipment) {
         }
     }
 
+    // Add to inventories & increase counts
     if (new_inventory) {
-        new_inventory.equipments.push(equipment);
+        new_inventory.equipments.splice(new_index, 0, equipment);
         const count = new_inventory.equipment_type_counts.get(equipment.type) || 0;
         new_inventory.equipment_type_counts.set(equipment.type, count + 1);
     }
 
     if (new_slot_equipment) {
-        current_inventory.equipments.push(new_slot_equipment);
+        current_inventory.equipments.splice(current_index, 0, new_slot_equipment);
         const count = current_inventory.equipment_type_counts.get(new_slot_equipment.type) || 0;
         current_inventory.equipment_type_counts.set(new_slot_equipment.type, count + 1);
     }
@@ -730,6 +743,9 @@ function transfer_equipment(current_slot, new_slot, equipment) {
     new_slot.equipment = equipment;
     current_slot.equipment = new_slot_equipment;
 
+    console.log('c n', current_index, new_index, current_inventory, new_inventory)
+
+    // Set Weapon if equipped
     if (new_inventory.type == Inventory_Type.EQUIPPED && equipment.type == Equipment_Type.WEAPON) {
         new_inventory.entity.basic_attack = equipment.action;
         new_inventory.entity.weapon = equipment;
@@ -860,6 +876,24 @@ player_entity = entities[player.entity_index];
 const action_slots = [];
 const action_slots_count = 9
 
+/** @type {Slot} */
+const weapon_slot = {
+    x: canvas.width * 0.01,
+    y: canvas.height * 0.65,
+    width: canvas.height * 0.1,
+    height: canvas.height * 0.1,
+}
+
+{
+    const margins = default_slot_info.zone_margin;
+    weapon_slot.zone_boundaries = [
+        weapon_slot.x + weapon_slot.width * margins[0],
+        weapon_slot.y + weapon_slot.height * margins[1],
+        weapon_slot.x + weapon_slot.width * (1 - margins[2]),
+        weapon_slot.y + weapon_slot.height * (1 - margins[3]),
+    ]
+
+}
 
 /** @type {Array<Entity>} */
 const start_entites = [
@@ -886,8 +920,19 @@ function calculate_entity_stats(entity) {
     const mana_percent = entity?.stats?.current_mana / entity?.stats?.max_mana;
 
     entity.stats = { ...entity.base_stats }
-    if (entity.equipped_items?.equipments && entity.equipped_items?.equipments.length != 0)
-        entity.equipped_items.equipments.forEach((equipment) => {
+    if (entity.equipped_items?.equipments && entity.equipped_items?.equipments.length != 0) {
+        console.log('eq length', entity.equipped_items.equipments.length);
+
+        const slots_exist = entity.equipped_items == inventory_zones[2]?.inventory;
+
+        const arr = slots_exist ? inventory_zones[2].slots : entity.equipped_items.equipments;
+
+        for (let i = 0; i < arr.length; i++) {
+
+            const equipment = slots_exist ? arr[i].equipment : arr[i];
+
+            if (!equipment) continue;
+
             if (equipment.flat_stats)
                 Object.keys(equipment.flat_stats).forEach((key) => {
                     entity.stats[key] = (entity.stats[key] ?? 0) + equipment.flat_stats[key];
@@ -900,7 +945,8 @@ function calculate_entity_stats(entity) {
                 equipment.extra_effects.forEach((extra_effect) => {
                     extra_effect.effect_callback({ ...extra_effect.context, entity });
                 })
-        });
+        }
+    }
 
     if (entity?.stats?.current_hp) {
         entity.stats.current_hp = entity.stats.max_hp * hp_percent;
@@ -1036,6 +1082,11 @@ function heal_entity(combat_context) {
 
     entity_on_heal(combat_context);
 
+}
+
+/** @type {(target_entity: Entity, amount: number)} */
+function spend_mana(target_entity, amount) {
+    target_entity.stats.current_mana = Math.max(0, target_entity.stats.current_mana - amount);
 }
 
 /** @type {(combat_context: Combat_Context)} */
@@ -1356,18 +1407,19 @@ function draw() {
 
     // Attack timer
     ctx.fillStyle = 'black';
+
+    ctx.drawImage(slot_image, weapon_slot.x, weapon_slot.y, weapon_slot.width, weapon_slot.height);
+
+    const zone_boundaries = weapon_slot.zone_boundaries;
     if (player_entity.weapon) {
-        ctx.drawImage(player_entity.weapon.image, hud_weapon_dimensions[0],
-            hud_weapon_dimensions[1],
-            hud_weapon_dimensions[2],
-            -hud_weapon_dimensions[3],
-        )
+        draw_image_boundaries(player_entity.weapon.image, zone_boundaries);
+
         ctx.fillStyle = 'rgb(0,0,0,0.7';
         const attack_percent = 1 - Math.min(1, player_entity.stats.attack_speed * player_entity.attack_timer / ticks_per_second);
-        ctx.fillRect(hud_weapon_dimensions[0],
-            hud_weapon_dimensions[1],
-            hud_weapon_dimensions[2],
-            -hud_weapon_dimensions[3] * attack_percent,
+        ctx.fillRect(zone_boundaries[0],
+            zone_boundaries[3],
+            zone_boundaries[2] - zone_boundaries[0],
+            -(zone_boundaries[3] - zone_boundaries[1]) * attack_percent,
         )
     }
 
@@ -1540,7 +1592,7 @@ function draw_equipped_items(entity, x, y, zoom) {
 
     for (let j = 0; j < entity.equipped_items.equipments.length; j++) {
         const equipment = entity.equipped_items.equipments[j];
-        if (equipment.image) {
+        if (equipment?.image) {
             images.add(equipment.image);
         }
     }

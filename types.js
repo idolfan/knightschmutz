@@ -225,6 +225,7 @@ const Entity_Type = {
  * @property {Margins} zone_boundaries
  * @property {Equipment} equipment
  * @property {Inventory} inventory
+ * @property {number} index
  */
 
 /**
