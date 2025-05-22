@@ -160,14 +160,18 @@ const Entity_Type = {
 
 /**
  * @typedef {Object} Visual_Effect
- * @property {HTMLImageElement} image
+ * @property {HTMLImageElement} [image]
  * @property {number} size
- * @property {number} duration
- * @property {number} time - passed time of duration
- * @property {Entity} entity
+ * @property {number} duration - in ticks
+ * @property {number} time - passed ticks of duration
+ * @property {Entity} [entity]
  * @property {number} x
  * @property {number} y
- * @property {number} peak_at - percenvisibility peak
+ * @property {number} [peak_at] - percent visibility peak
+ * @property {[x:number,y:number]} [destination]
+ * @property {(effect: Visual_Effect)} [draw_callback]
+ * @property {(effect: Visual_Effect)} [tick_callback]
+ * @property {boolean} [on_top]
  */
 
 /**

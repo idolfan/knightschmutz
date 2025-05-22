@@ -52,6 +52,8 @@ const hammer_image = new Image();
 hammer_image.src = './images/hammer.png';
 const rock_image = new Image();
 rock_image.src = './images/rock.png';
+const arrow_image = new Image();
+arrow_image.src = './images/arrow.png';
 
 //#endregion ------------------------------------------------------------------------------------------------------------------
 //#region ------------------------------------------------------------------ Constants ----------------------------------------
@@ -167,8 +169,8 @@ const attack_timer_up_requirement = (context) => {
 /** @type {Requirement} */
 const in_range_requirement = (context, action) => {
     if (!context.source_entity || !context.target_entity) return false;
-    const in_range = get_distance(context) <= action.range;
-    if (log_requirements) console.log('in_range', in_range, get_distance(context), action);
+    const in_range = entity_distance(context.source_entity, context.target_entity) <= action.range;
+    if (log_requirements) console.log('in_range', in_range, entity_distance(context.source_entity, context.target_entity), action);
     return in_range;
 }
 
@@ -224,14 +226,6 @@ const cost_mana = (context, action) => {
     spend_mana(context.source_entity, action.mana_cost);
 }
 
-/** @type {(context: Context) => number} */
-function get_distance(context) {
-    return Math.sqrt((context.source_entity.x - context.target_entity.x)
-        * (context.source_entity.x - context.target_entity.x)
-        + (context.source_entity.y - context.target_entity.y)
-        * (context.source_entity.y - context.target_entity.y));
-}
-
 /** @type {Create_Action} */
 const melee_attack = (favour) => {
     return {
@@ -243,6 +237,35 @@ const melee_attack = (favour) => {
             }
             damage_entity(combat_context);
             context.source_entity.attack_timer = 0;
+            /** @type {Visual_Effect} */
+            const visual_effect = {
+                duration: ticks_per_second * 0.2,
+                time: 0,
+                x: context.source_entity.visual_x,
+                y: context.source_entity.visual_y,
+                destination: [context.target_entity.visual_x, context.target_entity.visual_y],
+                on_top: true,
+                peak_at: 0.5,
+                draw_callback: (effect) => {
+                    const direction_x = effect.destination[0] - effect.x;
+                    const direction_y = effect.destination[1] - effect.y;
+                    const distance = Math.sqrt(direction_x * direction_x + direction_y * direction_y);
+                    const remaining_time = effect.duration - effect.time;
+                    const x_bigger = direction_x > direction_y;
+                    const x_swing = x_bigger ? Math.sign(direction_x) * cell_size : cell_size * effect.time / ticks_per_second * 4;
+                    const y_swing = x_bigger ? cell_size * effect.time / ticks_per_second * 4 : 0;
+                    ctx.beginPath();
+                    ctx.strokeStyle = "rgb(200,200,200, 0.8)";
+                    ctx.lineWidth = 5;
+                    ctx.moveTo(effect.x + cell_size / 2, effect.y + cell_size / 2);
+                    ctx.lineTo(effect.x + direction_x + x_swing + cell_size / 2 ,
+                        effect.y + direction_y + y_swing + cell_size / 2);
+                    ctx.stroke();
+                },
+                tick_callback: () => { }
+            } 
+
+            visual_effects.push(visual_effect);
         }],
         range: 1.5
     }
@@ -258,6 +281,7 @@ const bow_attack = (favour) => {
                 damage: { amount: 2 }
             }
             context.source_entity.attack_timer = 0;
+            const distance = entity_distance(context.source_entity, context.target_entity);
             scheduled_callbacks.push({
                 callbacks: [
                     (combat_context) => {
@@ -265,8 +289,40 @@ const bow_attack = (favour) => {
                     }
                 ],
                 contexts: [combat_context],
-                tick_date: tick_counter + ticks_per_second * 0.5,
+                tick_date: tick_counter + ticks_per_second * 0.025 * distance,
             })
+
+            /** @type {Visual_Effect} */
+            const visual_effect = {
+                duration: ticks_per_second * 0.025 * distance,
+                size: 1,
+                time: 0,
+                x: context.source_entity.x,
+                y: context.source_entity.y,
+                destination: [context.target_entity.x, context.target_entity.y],
+                draw_callback: (effect) => {
+                    const direction_x = effect.destination[0] - effect.x;
+                    const direction_y = effect.destination[1] - effect.y;
+                    const distance = Math.sqrt(direction_x * direction_x + direction_y * direction_y);
+                    const remaining_time = effect.duration - effect.time;
+                    ctx.strokeStyle = "rgb(127,51,0)";
+                    ctx.lineWidth = 5;
+                    ctx.moveTo(effect.x * cell_size, effect.y * cell_size);
+                    ctx.lineTo((effect.x + direction_x / distance) * cell_size, (effect.y + direction_y / distance) * cell_size);
+                    ctx.stroke();
+                    ctx.beginPath();
+                },
+                tick_callback: (effect) => {
+                    const direction_x = effect.destination[0] - effect.x;
+                    const direction_y = effect.destination[1] - effect.y;
+                    const remaining_time = effect.duration - effect.time;
+                    effect.x += direction_x / remaining_time;
+                    effect.y += direction_y / remaining_time;
+                }
+            }
+
+            visual_effects.push(visual_effect);
+            console.log('v', visual_effect);
         }],
         range: 7,
     }
@@ -1192,6 +1248,7 @@ function draw() {
 
     // Grid
     ctx.beginPath();
+    ctx.lineWidth = 3;
     for (let i = - (camera_origin[0] * zoom - canvas.width / 2) % cell_size; i < canvas.width; i += cell_size) {
         ctx.moveTo(i, 0);
         ctx.lineTo(i, canvas.height);
@@ -1242,11 +1299,14 @@ function draw() {
         }
     }
 
+    ctx.closePath();
+    ctx.beginPath();
+
     // Draw visual effects
     for (let i = 0; i < visual_effects.length; i++) {
 
         const visual_effect = visual_effects[i];
-        if (visual_effect) {
+        if (visual_effect && !visual_effect.on_top) {
             const entity = visual_effect.entity;
 
             const resulting_width = cell_size * visual_effect.size;
@@ -1259,13 +1319,19 @@ function draw() {
             const duration_percent = visual_effect.time / visual_effect.duration;
             const peak_at = visual_effect.peak_at;
 
-            ctx.globalAlpha = (duration_percent > peak_at ? 1 - (duration_percent - peak_at) / (1 - peak_at)
-                : duration_percent / peak_at)
+            if (peak_at)
+                ctx.globalAlpha = (duration_percent > peak_at ? 1 - (duration_percent - peak_at) / (1 - peak_at)
+                    : duration_percent / peak_at)
 
-            ctx.drawImage(visual_effect.image,
-                cell_middle[0] - resulting_width / 2, cell_middle[1] - resulting_height / 2,
-                resulting_width, resulting_height);
+            if (visual_effect.draw_callback) {
+                visual_effect.draw_callback(visual_effect);
+            } else {
+                ctx.drawImage(visual_effect.image,
+                    cell_middle[0] - resulting_width / 2, cell_middle[1] - resulting_height / 2,
+                    resulting_width, resulting_height);
+            }
             ctx.globalAlpha = 1;
+
         }
     }
 
@@ -1348,6 +1414,42 @@ function draw() {
         ctx.strokeStyle = 'orange';
         ctx.strokeRect(hovered_cell[0] * cell_size, hovered_cell[1] * cell_size, cell_size, cell_size);
     }
+    ctx.closePath();
+    ctx.beginPath();
+    
+    for (let i = 0; i < visual_effects.length; i++) {
+
+        const visual_effect = visual_effects[i];
+        if (visual_effect && visual_effect.on_top) {
+            const entity = visual_effect.entity;
+
+            const resulting_width = cell_size * visual_effect.size;
+            const resulting_height = cell_size * visual_effect.size;
+
+            const cell_middle = entity ?
+                [entity.visual_x + cell_size / 2, entity.visual_y + cell_size / 2]
+                : [visual_effect.x * cell_size + cell_size / 2, visual_effect.y * cell_size + cell_size / 2];
+
+            const duration_percent = visual_effect.time / visual_effect.duration;
+            const peak_at = visual_effect.peak_at;
+
+            if (peak_at)
+                ctx.globalAlpha = (duration_percent > peak_at ? 1 - (duration_percent - peak_at) / (1 - peak_at)
+                    : duration_percent / peak_at)
+
+            if (visual_effect.draw_callback) {
+                visual_effect.draw_callback(visual_effect);
+            } else {
+                ctx.drawImage(visual_effect.image,
+                    cell_middle[0] - resulting_width / 2, cell_middle[1] - resulting_height / 2,
+                    resulting_width, resulting_height);
+            }
+            ctx.globalAlpha = 1;
+
+        }
+    }
+
+    ctx.closePath();
 
     ctx.translate(-translation[0], -translation[1]);
 
@@ -1604,6 +1706,24 @@ function draw_equipped_items(entity, x, y, zoom) {
     if (images.has(bow_image)) ctx.drawImage(bow_image, x, y, 32 * zoom, 32 * zoom);
     //ctx.drawImage(bow_image, x, y, 32 * zoom, 32 * zoom);
 
+}
+
+/** @type {(image: HTMLImageElement, direction: [x: number, y: number]) => HTMLImageElement} */
+function rotate_image(image, direction) {
+    const temp_canvas = document.createElement('canvas');
+    temp_canvas.width = image.width;
+    temp_canvas.height = image.height;
+    const temp_ctx = temp_canvas.getContext('2d');
+
+    const angle = Math.atan2(-direction[1], direction[0]);
+    console.log('angle', angle, -135 / 360 * Math.PI);
+
+    temp_ctx.translate(temp_canvas.width / 2, temp_canvas.height / 2);
+    temp_ctx.rotate((-135 / 360 * Math.PI + angle) /* * Math.PI / 180 */);
+    temp_ctx.drawImage(image, -image.width / 2, -image.height / 2);
+
+    const rotated_image_canvas = temp_canvas;
+    return rotated_image_canvas;
 }
 
 //#endregion ---------------------------------------------------------------------------------------------------------------------
@@ -1968,13 +2088,24 @@ function tick() {
         visual_effect.time += 1;
         if (visual_effect.time >= visual_effect.duration) {
             visual_effects.splice(i, 1);
+            continue;
+        }
+        if (visual_effect.tick_callback) {
+            visual_effect.tick_callback(visual_effect);
+        } else {
+            if (visual_effect.destination) {
+                const direction = [visual_effect.destination[0] - visual_effect.x, visual_effect.destination[1] - visual_effect.y];
+                const remaining_time = (visual_effect.duration - visual_effect.time);
+                visual_effect.x += direction[0] / remaining_time;
+                visual_effect.y += direction[0] / remaining_time;
+            }
         }
     }
 
     // Process scheduled callbacks
     for (let i = 0; i < scheduled_callbacks.length; i++) {
         const scheduled_callback = scheduled_callbacks[i];
-        if (tick_counter != scheduled_callback.tick_date) continue;
+        if (tick_counter < scheduled_callback.tick_date) continue;
 
         for (let j = 0; j < scheduled_callback.callbacks.length; j++) {
             const callback = scheduled_callback.callbacks[j];
@@ -2199,4 +2330,10 @@ function chase_entity(source_entity, target_entity, action) {
     }
 }
 
+/** @type {(entity1: Entity, entity2: Entity)} */
+function entity_distance(entity1, entity2) {
+    const distance_x = entity2.x - entity1.x;
+    const distance_y = entity2.y - entity1.y;
+    return Math.sqrt(distance_x * distance_x + distance_y * distance_y);
+}
 //#endregion ----------------------------------------------------------------------------------------------------------------
