@@ -184,6 +184,7 @@ const Entity_Type = {
  * @property {number} id
  * @property {string} display_name
  * @property {Action} action
+ * @property {string} name
  */
 
 /**

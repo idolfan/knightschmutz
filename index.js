@@ -258,12 +258,12 @@ const melee_attack = (favour) => {
                     ctx.strokeStyle = "rgb(200,200,200, 0.8)";
                     ctx.lineWidth = 5;
                     ctx.moveTo(effect.x + cell_size / 2, effect.y + cell_size / 2);
-                    ctx.lineTo(effect.x + direction_x + x_swing + cell_size / 2 ,
+                    ctx.lineTo(effect.x + direction_x + x_swing + cell_size / 2,
                         effect.y + direction_y + y_swing + cell_size / 2);
                     ctx.stroke();
                 },
                 tick_callback: () => { }
-            } 
+            }
 
             visual_effects.push(visual_effect);
         }],
@@ -489,6 +489,7 @@ const test_amulet_equipment = (favour = 0) => {
         image: amulet_image,
         id: id_counter++,
         display_name: "Golden Amulet",
+        name: "golden_amulet",
     }
 }
 
@@ -505,6 +506,7 @@ const test_chestplate_equipment = (favour = 0) => {
         image: chestplate_image,
         id: id_counter++,
         display_name: "Simple Chestplate",
+        name: "simple_chestplate",
     }
 }
 
@@ -521,6 +523,7 @@ const test_helmet_equipment = (favour = 0) => {
         image: helmet_image,
         id: id_counter++,
         display_name: "Simple Helmet",
+        name: "simple_helment",
     }
 }
 
@@ -539,6 +542,7 @@ const test_sword_equipment = (favour = 0) => {
         id: id_counter++,
         display_name: "Simple Sword",
         action: melee_attack(),
+        name: "simple_sword",
     }
 }
 
@@ -556,6 +560,7 @@ const test_bow_equipment = (favour = 0) => {
         image: bow_image,
         id: id_counter++,
         display_name: "Simple Bow",
+        name: "simple_bow",
         action: bow_attack(),
     }
 }
@@ -1416,7 +1421,7 @@ function draw() {
     }
     ctx.closePath();
     ctx.beginPath();
-    
+
     for (let i = 0; i < visual_effects.length; i++) {
 
         const visual_effect = visual_effects[i];
@@ -1564,6 +1569,8 @@ function draw() {
         }
     }
 
+    let hovered_equipment;
+
     // Equipment Info in Inventory
     if (inventory_zones[0].visible) {
         draw_image_boundaries(info_image, info_boundaries);
@@ -1573,6 +1580,7 @@ function draw() {
 
             const equipment = hovered_slot_zone?.equipment || dragged_slot_zone?.equipment;
             if (equipment) {
+                hovered_equipment = equipment;
                 const keys = Object.keys(equipment.flat_stats);
                 const boundaries = info_zone_boundaries;
 
@@ -1626,6 +1634,79 @@ function draw() {
                 }
             }
 
+        }
+
+        // Comparison with hovered equipment
+        if (hovered_equipment) {
+            for (let i = 0; i < inventory_zones.length; i++) {
+                const inventory_zone = inventory_zones[i];
+                if (!inventory_zone.visible) continue;
+
+                for (let j = 0; j < inventory_zone.slots.length; j++) {
+                    const slot = inventory_zone.slots[j];
+
+                    const equipment = slot.equipment;
+                    if (equipment && equipment.name == hovered_equipment.name && equipment != hovered_equipment) {
+
+                        let has_worse_stat = false;
+                        let has_better_stat = false;
+                        let missing_stat = false;
+
+                        eq_f_keys = Object.keys(equipment.flat_stats);
+
+                        for (let i = 0; i < eq_f_keys.length; i++) {
+                            const key = eq_f_keys[i];
+
+                            const e_stat = equipment.flat_stats[key];
+                            const h_stat = hovered_equipment.flat_stats[key];
+
+                            if (h_stat == null)
+                                missing_stat = true;
+                            else if (e_stat == h_stat)
+                                continue;
+                            else if (e_stat < h_stat)
+                                has_worse_stat = true;
+                            else
+                                has_better_stat = true;
+                        }
+
+                        eq_m_keys = Object.keys(equipment.multiplicative_stats);
+
+                        for (let i = 0; i < eq_m_keys.length; i++) {
+                            const key = eq_m_keys[i];
+
+                            const e_stat = equipment.multiplicative_stats[key];
+                            const h_stat = hovered_equipment.multiplicative_stats[key];
+
+                            if (h_stat == null)
+                                missing_stat = true;
+                            else if (e_stat == h_stat)
+                                continue;
+                            else if (e_stat < h_stat)
+                                has_worse_stat = true;
+                            else
+                                has_better_stat = true;
+                        }
+
+                        if (missing_stat)
+                            ctx.fillStyle = 'rgb(128,128,128,0.7)';
+                        else if (has_worse_stat && has_better_stat)
+                            ctx.fillStyle = 'rgb(128,128,0,0.7)';
+                        else if (has_worse_stat)
+                            ctx.fillStyle = 'rgb(128,0,0,0.7)';
+                        else if (has_better_stat)
+                            ctx.fillStyle = 'rgb(0,128,0,0.7)';
+                        else
+                            continue;
+
+                        const boundaries = slot.zone_boundaries;
+                        //ctx.fillStyle = 'rgb(128,128,0,0.7)';
+                        ctx.fillRect(boundaries[0], boundaries[1], boundaries[2] - boundaries[0], boundaries[3] - boundaries[1]);
+
+
+                    }
+                }
+            }
         }
 
         // Player stats
