@@ -145,7 +145,7 @@ let hovered_entity;
 /** @type {[x: number, y: number]} */
 let hovered_cell;
 
-/** @type {Array<Inventory_Zone} */
+/** @type {Array<Inventory_Zone>} */
 let inventory_zones = [];
 
 
@@ -322,7 +322,6 @@ const bow_attack = (favour) => {
             }
 
             visual_effects.push(visual_effect);
-            console.log('v', visual_effect);
         }],
         range: 7,
     }
@@ -740,10 +739,10 @@ function transfer_equipment(current_slot, new_slot, equipment) {
     const new_slot_equipment = new_slot?.equipment;
 
     const same = current_inventory == new_inventory;
-    const same_type = equipment.type == new_slot_equipment?.type;
+    const same_type = equipment?.type == new_slot_equipment?.type;
 
     // Item type Counts
-    if (!same && !same_type && new_inventory.equipment_type_limits) {
+    if (!same && !same_type && equipment && new_inventory.equipment_type_limits) {
         const count = new_inventory.equipment_type_counts.get(equipment.type) || 0;
         const limit = new_inventory.equipment_type_limits.get(equipment.type);
 
@@ -789,7 +788,7 @@ function transfer_equipment(current_slot, new_slot, equipment) {
     }
 
     // Add to inventories & increase counts
-    if (new_inventory) {
+    if (new_inventory && equipment) {
         new_inventory.equipments.splice(new_index, 0, equipment);
         const count = new_inventory.equipment_type_counts.get(equipment.type) || 0;
         new_inventory.equipment_type_counts.set(equipment.type, count + 1);
@@ -804,10 +803,8 @@ function transfer_equipment(current_slot, new_slot, equipment) {
     new_slot.equipment = equipment;
     current_slot.equipment = new_slot_equipment;
 
-    console.log('c n', current_index, new_index, current_inventory, new_inventory)
-
     // Set Weapon if equipped
-    if (new_inventory.type == Inventory_Type.EQUIPPED && equipment.type == Equipment_Type.WEAPON) {
+    if (equipment && new_inventory.type == Inventory_Type.EQUIPPED && equipment.type == Equipment_Type.WEAPON) {
         new_inventory.entity.basic_attack = equipment.action;
         new_inventory.entity.weapon = equipment;
     }
@@ -982,7 +979,6 @@ function calculate_entity_stats(entity) {
 
     entity.stats = { ...entity.base_stats }
     if (entity.equipped_items?.equipments && entity.equipped_items?.equipments.length != 0) {
-        console.log('eq length', entity.equipped_items.equipments.length);
 
         const slots_exist = entity.equipped_items == inventory_zones[2]?.inventory;
 
@@ -1576,9 +1572,9 @@ function draw() {
         draw_image_boundaries(info_image, info_boundaries);
 
 
-        if (hovered_slot_zone || dragged_slot_zone) {
+        if (hovered_slot || dragged_slot_zone) {
 
-            const equipment = hovered_slot_zone?.equipment || dragged_slot_zone?.equipment;
+            const equipment = hovered_slot?.equipment || dragged_slot_zone?.equipment;
             if (equipment) {
                 hovered_equipment = equipment;
                 const keys = Object.keys(equipment.flat_stats);
@@ -1638,6 +1634,8 @@ function draw() {
 
         // Comparison with hovered equipment
         if (hovered_equipment) {
+            let hovered_is_usefull = false;
+
             for (let i = 0; i < inventory_zones.length; i++) {
                 const inventory_zone = inventory_zones[i];
                 if (!inventory_zone.visible) continue;
@@ -1692,8 +1690,10 @@ function draw() {
                             ctx.fillStyle = 'rgb(128,128,128,0.7)';
                         else if (has_worse_stat && has_better_stat)
                             ctx.fillStyle = 'rgb(128,128,0,0.7)';
-                        else if (has_worse_stat)
+                        else if (has_worse_stat) {
                             ctx.fillStyle = 'rgb(128,0,0,0.7)';
+                            if(slot.inventory != hovered_slot?.inventory) hovered_is_usefull = true;
+                        }
                         else if (has_better_stat)
                             ctx.fillStyle = 'rgb(0,128,0,0.7)';
                         else
@@ -1707,6 +1707,13 @@ function draw() {
                     }
                 }
             }
+
+            if (hovered_is_usefull && hovered_slot && !dragged_slot_zone) {
+                const boundaries = hovered_slot.zone_boundaries;
+                ctx.fillStyle = 'rgb(0,128,0,0.5)';
+                ctx.fillRect(boundaries[0], boundaries[1], boundaries[2] - boundaries[0], boundaries[3] - boundaries[1]);
+            }
+
         }
 
         // Player stats
@@ -1814,13 +1821,13 @@ const mouse_position = [0, 0];
 let time_since_entity_hovered = 0;
 
 /** @type {Slot} */
-let hovered_slot_zone;
+let hovered_slot;
 
 /** @type {Slot} */
 let dragged_slot_zone;
 
 /** @type {Margins} */
-let drag_start = [];
+let drag_start;
 
 const keys_pressed = {
     w: false,
@@ -1871,11 +1878,11 @@ function handle_inputs() {
         keys_typed.left_mouse_button = false;
 
         if (inventory_zones[0].visible || inventory_zones[1].visible) {
-            console.log('hovered', hovered_slot_zone)
-            if (hovered_slot_zone && hovered_slot_zone.equipment) {
-                dragged_slot_zone = hovered_slot_zone;
+            console.log('hovered', hovered_slot)
+            if (hovered_slot && hovered_slot.equipment) {
+                dragged_slot_zone = hovered_slot;
                 console.log('start drag');
-                drag_start = [...hovered_slot_zone.zone_boundaries];
+                drag_start = [...hovered_slot.zone_boundaries];
             }
             break left_mouse_button;
         }
@@ -1953,16 +1960,29 @@ function handle_inputs() {
     right_mouse_button: if (keys_typed.right_mouse_button) {
         keys_typed.right_mouse_button = false;
 
-        player_entity.chasing_entity = undefined;
-        player_entity.chasing_action_and_context = undefined;
+        if (inventory_zones[0].visible || inventory_zones[1].visible) {
 
-        const target_entity = hovered_entity;
-        if (!target_entity) break right_mouse_button;
-        const context = { target_entity, source_entity: player_entity }
-        //if (get_distance(context) >= 1.5) {
-        chase_entity(player_entity, target_entity, player_entity.basic_attack);
-        //}
-        //take_action(context, player_entity.basic_attack);
+            if (hovered_slot && hovered_slot.inventory != inventory_zones[2].inventory && hovered_slot.equipment) {
+                const new_slot = inventory_zones[2].slots.find((slot) => {
+                    const equipment = slot.equipment;
+                    return equipment?.type == hovered_slot.equipment.type;
+                })
+                if (new_slot) transfer_equipment(hovered_slot, new_slot, hovered_slot.equipment);
+            }
+
+        } else {
+
+            player_entity.chasing_entity = undefined;
+            player_entity.chasing_action_and_context = undefined;
+
+            const target_entity = hovered_entity;
+            if (!target_entity) break right_mouse_button;
+            const context = { target_entity, source_entity: player_entity }
+            //if (get_distance(context) >= 1.5) {
+            chase_entity(player_entity, target_entity, player_entity.basic_attack);
+            //}
+            //take_action(context, player_entity.basic_attack);
+        }
     }
 
     if (keys_typed.e) {
@@ -1998,11 +2018,22 @@ function handle_inputs() {
     for (let i = 1; i <= 9; i++) {
         if (keys_typed[i]) {
             keys_typed[i] = false;
-            const action = action_slots[i - 1].action;
-            const target_entity = hovered_entity;
-            const context = { target_entity, source_entity: player_entity }
-            if (action) {
-                take_action(context, action);
+
+            if (inventory_zones[0].visible || inventory_zones[1].visible) {
+
+                if (hovered_slot && hovered_slot.inventory != inventory_zones[2].inventory) {
+                    const new_slot = inventory_zones[2].slots[i - 1];
+                    if (new_slot) transfer_equipment(hovered_slot, new_slot, hovered_slot.equipment);
+                }
+
+            } else {
+                keys_typed[i] = false;
+                const action = action_slots[i - 1].action;
+                const target_entity = hovered_entity;
+                const context = { target_entity, source_entity: player_entity }
+                if (action) {
+                    take_action(context, action);
+                }
             }
         }
     }
@@ -2127,6 +2158,10 @@ window.addEventListener("mousemove", (event) => {
     mouse_position[1] = event.clientY;
 })
 
+window.addEventListener("dblclick", (event) => {
+    console.log("doubleclick!");
+})
+
 //#endregion -----------------------------------------------------------------------------------------------------------------
 //#region -------------------------------------------------------------------- Updating --------------------------------------
 
@@ -2152,14 +2187,14 @@ function tick() {
 
             if (mouse_inside) {
                 //console.log('Mouse inside zone', slot, mouse_position);
-                hovered_slot_zone = slot;
+                hovered_slot = slot;
                 found = true;
                 break find_hovered;
             }
         }
     }
 
-    if (!found) hovered_slot_zone = null;
+    if (!found) hovered_slot = null;
 
     handle_inputs();
 
