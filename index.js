@@ -2021,7 +2021,7 @@ function handle_inputs() {
 
             if (inventory_zones[0].visible || inventory_zones[1].visible) {
 
-                if (hovered_slot && hovered_slot.inventory != inventory_zones[2].inventory) {
+                if (hovered_slot /* && hovered_slot.inventory != inventory_zones[2].inventory */) {
                     const new_slot = inventory_zones[2].slots[i - 1];
                     if (new_slot) transfer_equipment(hovered_slot, new_slot, hovered_slot.equipment);
                 }
