@@ -54,6 +54,8 @@ const rock_image = new Image();
 rock_image.src = './images/rock.png';
 const arrow_image = new Image();
 arrow_image.src = './images/arrow.png';
+const spike_image = new Image();
+spike_image.src = './images/spike.png';
 
 //#endregion ------------------------------------------------------------------------------------------------------------------
 //#region ------------------------------------------------------------------ Constants ----------------------------------------
@@ -93,6 +95,15 @@ const Inventory_Type = {
     PLAYER: 'PLAYER',
     EQUIPPED: 'EQUIPPED',
 };
+
+/**
+ * @enum {string}
+ */
+const Enemy_Type = {
+    RED_MELEE: 'RED_MELEE',
+    RED_BOW: 'RED_BOW',
+    RED_MAGE: 'RED_MAGE',
+}
 
 //#endregion ------------------------------------------------------------------------------------------------------------------
 //#region ------------------------------------------------------------------ Game state ---------------------------------------
@@ -175,13 +186,13 @@ const in_range_requirement = (context, action) => {
 }
 
 /** @type {Requirement} */
-const is_adjacent_cell_requirement = (context, action) => {
+const in_cell_range_requirement = (context, action) => {
     const x_distance = Math.abs(context.source_entity.x - context.target_cell[0]);
     const y_distance = Math.abs(context.source_entity.y - context.target_cell[1]);
 
-    const is_adjacent_cell = x_distance + y_distance <= 1;
-    if (log_requirements) console.log('is_adjacen_cell', is_adjacent_cell);
-    return is_adjacent_cell;
+    const in_range = x_distance + y_distance <= action.range;
+    if (log_requirements) console.log('in_cell_range', in_range);
+    return in_range;
 }
 
 /** @type {Requirement} */
@@ -193,6 +204,7 @@ const cooldown_up_requirement = (context, action) => {
 
 /** @type {Requirement} */
 const mana_available_requirement = (context, action) => {
+    console.log("Mana", context.source_entity.stats.current_mana, action.mana_cost);
     const mana_available = context.source_entity.stats.current_mana >= action.mana_cost;
     if (log_requirements) console.log('mana_available', mana_available);
     return mana_available;
@@ -207,7 +219,13 @@ const log_requirements = false;
  * @returns Which requirement failed
  * @type {(context: Context, action: Action) => Requirement} */
 function take_action(context, action) {
-    const full_context = { target_cell: [...hovered_cell], ...context };
+    let target_cell;
+    if(context.source_entity == player_entity){
+        if(hovered_cell) target_cell = [...hovered_cell];
+    } else {
+        target_cell = [...context.source_entity.target_cell];
+    }
+    const full_context = { target_cell: target_cell, ...context };
     if (action.requirements) {
         for (const requirement_callback of action.requirements) {
             if (!requirement_callback(full_context, action)) return requirement_callback;
@@ -351,7 +369,7 @@ const heal_spell = (favour) => {
 /** @type {Create_Action} */
 const hammer_spell = (favour) => {
     return {
-        requirements: [is_adjacent_cell_requirement, cooldown_up_requirement, mana_available_requirement],
+        requirements: [in_cell_range_requirement, cooldown_up_requirement, mana_available_requirement],
         effect_functions: [cost_mana,
             (context, action) => {
                 const target_cell = context.target_cell;
@@ -362,13 +380,14 @@ const hammer_spell = (favour) => {
         cooldown_date: tick_counter - ticks_per_second * 4,
         image: hammer_image,
         mana_cost: 5,
+        range: 1,
     }
 }
 
 /** @type {Create_Action} */
 const construct_spell = (favour) => {
     return {
-        requirements: [is_adjacent_cell_requirement, cooldown_up_requirement, mana_available_requirement],
+        requirements: [in_cell_range_requirement, cooldown_up_requirement, mana_available_requirement],
         effect_functions: [cost_mana,
             (context, action) => {
                 const target_cell = context.target_cell;
@@ -379,6 +398,74 @@ const construct_spell = (favour) => {
         cooldown_date: tick_counter - ticks_per_second * 10,
         image: rock_image,
         mana_cost: 15,
+        range: 1,
+    }
+}
+
+/** @type {Create_Action} */
+const spike_spell = (favour) => {
+    return {
+        requirements: [in_cell_range_requirement, cooldown_up_requirement, mana_available_requirement],
+        effect_functions: [
+            cost_mana,
+            (context, action) => {
+                action.cooldown_date = tick_counter;
+                const indicator = aoe_indicator_effect(context.target_cell[0], context.target_cell[1], 1, ticks_per_second * 1.5);
+                visual_effects.push(indicator);
+                scheduled_callbacks.push({
+                    callbacks: [
+                        (cont) => {
+                            const cell = cont.target_cell;
+                            const entity = entity_positions[cell[0]][cell[1]];
+                            visual_effects.push({
+                                duration: ticks_per_second * 0.35,
+                                size: 1,
+                                time: 0,
+                                x: cell[0],
+                                y: cell[1],
+                                image: spike_image,
+                                peak_at: 0.2,
+
+                            })
+                            if (entity) {
+                                damage_entity({
+                                    source_entity: context.source_entity,
+                                    target_entity: entity,
+                                    damage: {
+                                        amount: 7
+                                    }
+                                })
+                            }
+                        }
+                    ],
+                    contexts: [context],
+                    tick_date: tick_counter + ticks_per_second * 1.5,
+                })
+            }
+        ],
+        cooldown: ticks_per_second * 10,
+        cooldown_date: tick_counter - ticks_per_second * 10,
+        image: spike_image,
+        mana_cost: 5,
+        range: 10,
+    }
+}
+
+/** @type {(x: number, y: number, size: number, time: number) => Visual_Effect} */
+const aoe_indicator_effect = (x, y, size, duration) => {
+    return {
+        duration: duration,
+        size: size,
+        time: 0,
+        x: (x + 0.5) * cell_size,
+        y: (y + 0.5) * cell_size,
+        draw_callback: (effect) => {
+            const rad = size * cell_size * 0.5 * (effect.time / effect.duration);
+            ctx.fillStyle = "rgb(255, 0, 0, 0.4)";
+            ctx.fillRect(effect.x - rad, effect.y - rad, 2 * rad, 2 * rad);
+            ctx.strokeStyle = "red";
+            ctx.strokeRect(effect.x - rad, effect.y - rad, 2 * rad, 2 * rad);
+        }
     }
 }
 
@@ -851,8 +938,9 @@ function close_inventory(inventory) {
 
 //#endregion ------------------------------------------------------------------------------------------------------------------
 //#region --------------------------------------------------------------- Entity definitions ----------------------------------
+
 /** @type {Create_Entity} */
-const red_square_entity = (x, y) => {
+const red_melee_entity = (x, y) => {
     return {
         display_name: "Mean Red Square",
         x: x,
@@ -865,8 +953,54 @@ const red_square_entity = (x, y) => {
             movement_speed: get_random_int(2, 8),
         },
         attack_timer: ticks_per_second,
+        enemy_type: Enemy_Type.RED_MELEE,
+        actions: [melee_attack()],
+        weapon: test_sword_equipment(),   
     }
 }
+
+/** @type {Create_Entity} */
+const red_bow_entity = (x, y) => {
+    return {
+        display_name: "Mean Red Top Triangle",
+        x: x,
+        y: y,
+        path: null,
+        entity_type: 'ENEMY',
+        base_stats: {
+            attack_speed: 1,
+            max_hp: 7,
+            movement_speed: get_random_int(4, 8),
+        },
+        attack_timer: ticks_per_second,
+        enemy_type: Enemy_Type.RED_BOW,
+        actions: [bow_attack()],
+        weapon: test_bow_equipment(),
+
+    }
+}
+
+/** @type {Create_Entity} */
+const red_mage_entity = (x, y) => {
+    return {
+        display_name: "Mean Red Bottom Triangle",
+        x: x,
+        y: y,
+        path: null,
+        entity_type: 'ENEMY',
+        base_stats: {
+            attack_speed: 1,
+            max_hp: 7,
+            movement_speed: get_random_int(4, 8),
+            max_mana: 20,
+        },
+        attack_timer: ticks_per_second,
+        enemy_type: Enemy_Type.RED_MAGE,
+        actions: [spike_spell()],
+
+    }
+}
+
 //#endregion ------------------------------------------------------------------------------------------------------------------
 //#region ------------------------------------------------------------------- Init state --------------------------------------
 
@@ -955,9 +1089,16 @@ const weapon_slot = {
 
 /** @type {Array<Entity>} */
 const start_entites = [
-    red_square_entity(20, 20),
-    red_square_entity(30, 30),
-    red_square_entity(40, 40)
+    red_melee_entity(20, 20),
+    red_melee_entity(30, 30),
+    red_melee_entity(40, 40),
+    red_bow_entity(30,40),
+    red_bow_entity(20,40),
+    red_bow_entity(40,10),
+    red_mage_entity(15,30),
+    red_mage_entity(8,35),
+    red_mage_entity(25,30),
+    
 ]
 
 for (let i = 0; i < start_entites.length; i++) {
@@ -1066,6 +1207,7 @@ function add_player(player) {
             heal_spell(),
             hammer_spell(),
             construct_spell(),
+            spike_spell(),
         ]
     }
 
@@ -1388,11 +1530,36 @@ function draw() {
             const x = entity.visual_x;
             const y = entity.visual_y;
 
-            ctx.fillStyle = 'red';
-            ctx.fillRect(x, y, entity_size, entity_size);
+            if (entity.enemy_type == Enemy_Type.RED_MELEE) {
+                ctx.fillStyle = 'red';
+                ctx.fillRect(x, y, entity_size, entity_size);
 
-            ctx.strokeStyle = hovered_entity == entity ? 'orange' : 'black';
-            ctx.strokeRect(x, y, entity_size, entity_size);
+                ctx.strokeStyle = hovered_entity == entity ? 'orange' : 'black';
+                ctx.strokeRect(x, y, entity_size, entity_size);
+
+            } else if (entity.enemy_type == Enemy_Type.RED_BOW) {
+                ctx.fillStyle= 'red';
+                ctx.moveTo(x, y);
+                ctx.beginPath();
+                ctx.strokeStyle = hovered_entity == entity ? 'orange' : 'black';
+                ctx.lineTo(x + entity_size, y);
+                ctx.lineTo(x + entity_size / 2, y + entity_size);
+                ctx.lineTo(x, y);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+            } else if(entity.enemy_type == Enemy_Type.RED_MAGE) {
+                ctx.fillStyle= 'red';
+                ctx.moveTo(x, y + entity_size);
+                ctx.beginPath();
+                ctx.strokeStyle = hovered_entity == entity ? 'orange' : 'black';
+                ctx.lineTo(x + entity_size / 2, y);
+                ctx.lineTo(x + entity_size, y + entity_size);
+                ctx.lineTo(x, y + entity_size);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+            }
 
             const damage_percent = 1 - Math.max(0, Math.min(1, entity.stats.current_hp / entity.stats.max_hp));
             ctx.fillStyle = "rgb(0,0,0,0.7)";
@@ -1404,6 +1571,7 @@ function draw() {
             ctx.moveTo(x, entity.visual_y + cell_size - cell_margin);
             ctx.lineTo(x + (entity_size) * attack_percent, entity.visual_y + cell_size - cell_margin);
             ctx.stroke();
+
         }
 
     }
@@ -1692,7 +1860,7 @@ function draw() {
                             ctx.fillStyle = 'rgb(128,128,0,0.7)';
                         else if (has_worse_stat) {
                             ctx.fillStyle = 'rgb(128,0,0,0.7)';
-                            if(slot.inventory != hovered_slot?.inventory) hovered_is_usefull = true;
+                            if (slot.inventory != hovered_slot?.inventory) hovered_is_usefull = true;
                         }
                         else if (has_better_stat)
                             ctx.fillStyle = 'rgb(0,128,0,0.7)';
@@ -2315,10 +2483,11 @@ function tick() {
         const closest_player_index = distance_to_players.indexOf(Math.min(...distance_to_players));
         if (closest_player_index != -1) {
             const closest_player_entity = player_entities[closest_player_index];
+            entity.target_cell = [closest_player_entity.x, closest_player_entity.y];
             const distance_to_closest_player = distance_to_players[closest_player_index];
             if (distance_to_closest_player < 10) {
-
-                chase_entity(entity, closest_player_entity, melee_attack());
+                
+                chase_entity(entity, closest_player_entity, entity.actions[0]);
             }
         }
 

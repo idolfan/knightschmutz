@@ -50,6 +50,9 @@ const Entity_Type = {
  * @property {Action} basic_attack
  * @property {Equipment} weapon
  * @property {Array<Action>} actions
+ * 
+ * @property {Enemy_Type} enemy_type
+ * @property {[x: number, y: number]} target_cell
  */
 
 /**
@@ -172,6 +175,11 @@ const Entity_Type = {
  * @property {(effect: Visual_Effect)} [draw_callback]
  * @property {(effect: Visual_Effect)} [tick_callback]
  * @property {boolean} [on_top]
+ */
+
+/**
+ * @typedef {Callback} Create_Visual_Effect
+ * @returns {Visual_Effect}
  */
 
 /**
