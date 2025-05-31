@@ -37,10 +37,8 @@ const Entity_Type = {
  * @property {number} enemy_entity_index - The entity's index inside the enemy_entites array
  * @property {number} player_entity_index - The entity's index inside the player_entites array
  * 
- * @property {Entity} chasing_entity - The entity being chased
- * @property {Object} chasing_action_and_context - The action attempted to perform while chasing
- * @property {Action} chasing_action_and_context.action
- * @property {Context} chasing_action_and_context.context
+ * @property {Phase} [phase]
+ * @property {Phase_States} phase_states
  * 
  * @property {number} attack_timer - in ticks since last attack
  * @property {Entity_Stats} base_stats - Used to calculate stats
@@ -53,6 +51,25 @@ const Entity_Type = {
  * 
  * @property {Enemy_Type} enemy_type
  * @property {[x: number, y: number]} target_cell
+ */
+
+/**
+ * @typedef {Object} Phase_States
+ * @property {Object} chasing
+ * @property {Entity} chasing.target
+ * @property {number} chasing.aggro_range
+ * @property {number} chasing.lose_range
+ * @property {Action} chasing.action
+ * @property {Object} wandering
+ * @property {number} wandering.range
+ * @property {Object} patroling
+ * @property {Object} protecting
+ * @property {Object} idle
+ * @property {Object} fleeing
+ * @property {Object} kiting
+ * @property {Entity} kiting.target
+ * @property {Entity} kiting.action
+ * @property {boolean} new_phase_change
  */
 
 /**
@@ -79,10 +96,10 @@ const Entity_Type = {
 /**
  * @typedef {Object} Path
  * @property {number} id
- * @property {number} entity_index
+ * @property {Entity} entity
  * @property {Array<Array>} path_steps - An array of positions representing the path.
- * @property {number} path_length
  * @property {number} progress - progress to the next point in the path. Between 0 and 1
+ * @property {Entity} blocked_by
  */
 
 /** 

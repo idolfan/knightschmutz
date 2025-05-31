@@ -105,6 +105,20 @@ const Enemy_Type = {
     RED_MAGE: 'RED_MAGE',
 }
 
+/**
+ * @enum {string}
+ */
+const Phase = {
+    CHASING: 'CHASING',
+    WANDERING: 'WANDERING',
+    PATROLING: 'PATROLING',
+    PROTECTING: 'PROTECTING',
+    IDLE: 'IDLE',
+    FLEEING: 'FLEEING',
+    KITING: 'KITING',
+    PATHING: 'PATHING',
+}
+
 //#endregion ------------------------------------------------------------------------------------------------------------------
 //#region ------------------------------------------------------------------ Game state ---------------------------------------
 
@@ -219,21 +233,48 @@ const log_requirements = false;
  * @returns Which requirement failed
  * @type {(context: Context, action: Action) => Requirement} */
 function take_action(context, action) {
-    let target_cell;
-    if(context.source_entity == player_entity){
-        if(hovered_cell) target_cell = [...hovered_cell];
-    } else {
-        target_cell = [...context.source_entity.target_cell];
+    let target_cell = context.source_entity.target_cell
+    if (context.source_entity == player_entity)
+    {
+        if (hovered_cell) target_cell = [...hovered_cell];
     }
     const full_context = { target_cell: target_cell, ...context };
-    if (action.requirements) {
-        for (const requirement_callback of action.requirements) {
+    if (action.requirements)
+    {
+        for (const requirement_callback of action.requirements)
+        {
             if (!requirement_callback(full_context, action)) return requirement_callback;
         }
     }
 
-    for (const effect_function of action.effect_functions) {
+    for (const effect_function of action.effect_functions)
+    {
         effect_function(full_context, action);
+    }
+
+    return null;
+}
+
+/**
+ * @returns Which requirement failed
+ * @type {(context: Context, action: Action) => Requirement}
+ */
+function try_action(context, action) {
+    let target_cell;
+    if (context.source_entity == player_entity)
+    {
+        if (hovered_cell) target_cell = [...hovered_cell];
+    } else
+    {
+        target_cell = [...context.source_entity.target_cell];
+    }
+    const full_context = { target_cell: target_cell, ...context };
+    if (action.requirements)
+    {
+        for (const requirement_callback of action.requirements)
+        {
+            if (!requirement_callback(full_context, action)) return requirement_callback;
+        }
     }
 
     return null;
@@ -427,7 +468,8 @@ const spike_spell = (favour) => {
                                 peak_at: 0.2,
 
                             })
-                            if (entity) {
+                            if (entity)
+                            {
                                 damage_entity({
                                     source_entity: context.source_entity,
                                     target_entity: entity,
@@ -731,23 +773,28 @@ function init_slots(inventory_zone, inventory) {
     inventory_zone.inventory = inventory;
 
     let slot_index = 0;
-    if (inventory) {
+    if (inventory)
+    {
 
         inventory.equipment_type_counts = new Map();
         const equipped_type = inventory.type == Inventory_Type.EQUIPPED;
 
-        for (let j = zone_boundaries[1]; j < zone_boundaries[3] - slot_height; j += slot_height + slot_distances[1]) {
-            for (let i = zone_boundaries[0]; i < zone_boundaries[2] - slot_width; i += slot_width + slot_distances[0]) {
+        for (let j = zone_boundaries[1]; j < zone_boundaries[3] - slot_height; j += slot_height + slot_distances[1])
+        {
+            for (let i = zone_boundaries[0]; i < zone_boundaries[2] - slot_width; i += slot_width + slot_distances[0])
+            {
                 if (slot_index >= inventory.slot_count) break;
 
                 const equipment = inventory.equipments[slot_index];
 
                 // TODO: Move this where it belongs. Should be done seperate for every inventory, and every equipment
-                if (equipment) {
+                if (equipment)
+                {
                     const current_count = inventory.equipment_type_counts.get(equipment.type) || 0;
                     inventory.equipment_type_counts.set(equipment.type, current_count + 1);
 
-                    if (equipped_type && equipment.type == Equipment_Type.WEAPON) {
+                    if (equipped_type && equipment.type == Equipment_Type.WEAPON)
+                    {
                         console.log('Basic attack set');
                         inventory.entity.basic_attack = equipment.action;
                         inventory.entity.weapon = equipment;
@@ -790,8 +837,10 @@ function init_action_slots() {
 
     action_slots.length = 0;
 
-    for (let j = zone_boundaries[1]; j < zone_boundaries[3] - slot_height; j += slot_height + slot_distances[1]) {
-        for (let i = zone_boundaries[0]; i < zone_boundaries[2] - slot_width; i += slot_width + slot_distances[0]) {
+    for (let j = zone_boundaries[1]; j < zone_boundaries[3] - slot_height; j += slot_height + slot_distances[1])
+    {
+        for (let i = zone_boundaries[0]; i < zone_boundaries[2] - slot_width; i += slot_width + slot_distances[0])
+        {
             if (slot_index >= action_slots_count) break;
 
             const action = player_entity.actions[slot_index];
@@ -829,7 +878,8 @@ function transfer_equipment(current_slot, new_slot, equipment) {
     const same_type = equipment?.type == new_slot_equipment?.type;
 
     // Item type Counts
-    if (!same && !same_type && equipment && new_inventory.equipment_type_limits) {
+    if (!same && !same_type && equipment && new_inventory.equipment_type_limits)
+    {
         const count = new_inventory.equipment_type_counts.get(equipment.type) || 0;
         const limit = new_inventory.equipment_type_limits.get(equipment.type);
 
@@ -837,7 +887,8 @@ function transfer_equipment(current_slot, new_slot, equipment) {
         if (new_type_full) return;
     }
 
-    if (!same && !same_type && new_slot_equipment && current_inventory.equipment_type_limits) {
+    if (!same && !same_type && new_slot_equipment && current_inventory.equipment_type_limits)
+    {
         const count = current_inventory.equipment_type_counts.get(new_slot_equipment.type) || 0;
         const limit = current_inventory.equipment_type_limits.get(new_slot_equipment.type);
 
@@ -848,10 +899,13 @@ function transfer_equipment(current_slot, new_slot, equipment) {
     let current_index;
 
     // Remove from inventories & lower counts
-    if (current_inventory) {
-        for (current_index = 0; current_index < current_inventory.equipments.length; current_index++) {
+    if (current_inventory)
+    {
+        for (current_index = 0; current_index < current_inventory.equipments.length; current_index++)
+        {
             const comparison_equipment = current_inventory.equipments[current_index];
-            if (comparison_equipment == equipment) {
+            if (comparison_equipment == equipment)
+            {
                 current_inventory.equipments.splice(current_index, 1);
                 const count = current_inventory.equipment_type_counts.get(equipment.type);
                 current_inventory.equipment_type_counts.set(equipment.type, count - 1);
@@ -862,10 +916,13 @@ function transfer_equipment(current_slot, new_slot, equipment) {
 
     let new_index = new_inventory.equipments.length;
 
-    if (new_slot_equipment) {
-        for (new_index = 0; new_index < new_inventory.equipments.length; new_index++) {
+    if (new_slot_equipment)
+    {
+        for (new_index = 0; new_index < new_inventory.equipments.length; new_index++)
+        {
             const comparison_equipment = new_inventory.equipments[new_index];
-            if (comparison_equipment == new_slot_equipment) {
+            if (comparison_equipment == new_slot_equipment)
+            {
                 new_inventory.equipments.splice(new_index, 1);
                 const count = new_inventory.equipment_type_counts.get(new_slot_equipment.type);
                 new_inventory.equipment_type_counts.set(new_slot_equipment.type, count - 1);
@@ -875,13 +932,15 @@ function transfer_equipment(current_slot, new_slot, equipment) {
     }
 
     // Add to inventories & increase counts
-    if (new_inventory && equipment) {
+    if (new_inventory && equipment)
+    {
         new_inventory.equipments.splice(new_index, 0, equipment);
         const count = new_inventory.equipment_type_counts.get(equipment.type) || 0;
         new_inventory.equipment_type_counts.set(equipment.type, count + 1);
     }
 
-    if (new_slot_equipment) {
+    if (new_slot_equipment)
+    {
         current_inventory.equipments.splice(current_index, 0, new_slot_equipment);
         const count = current_inventory.equipment_type_counts.get(new_slot_equipment.type) || 0;
         current_inventory.equipment_type_counts.set(new_slot_equipment.type, count + 1);
@@ -891,17 +950,20 @@ function transfer_equipment(current_slot, new_slot, equipment) {
     current_slot.equipment = new_slot_equipment;
 
     // Set Weapon if equipped
-    if (equipment && new_inventory.type == Inventory_Type.EQUIPPED && equipment.type == Equipment_Type.WEAPON) {
+    if (equipment && new_inventory.type == Inventory_Type.EQUIPPED && equipment.type == Equipment_Type.WEAPON)
+    {
         new_inventory.entity.basic_attack = equipment.action;
         new_inventory.entity.weapon = equipment;
     }
 
-    if (new_slot_equipment && current_inventory.type == Inventory_Type.EQUIPPED && new_slot_equipment.type == Equipment_Type.WEAPON) {
+    if (new_slot_equipment && current_inventory.type == Inventory_Type.EQUIPPED && new_slot_equipment.type == Equipment_Type.WEAPON)
+    {
         current_inventory.entity.basic_attack = new_slot_equipment.action;
         current_inventory.entity.weapon = new_slot_equipment;
     }
 
-    if (current_inventory.type == Inventory_Type.EQUIPPED || new_inventory.type == Inventory_Type.EQUIPPED) {
+    if (current_inventory.type == Inventory_Type.EQUIPPED || new_inventory.type == Inventory_Type.EQUIPPED)
+    {
         calculate_entity_stats(current_inventory.entity);
         if (!same) calculate_entity_stats(new_inventory.entity);
     }
@@ -911,26 +973,32 @@ function transfer_equipment(current_slot, new_slot, equipment) {
 function close_inventory(inventory) {
     if (!inventory) return;
 
-    if (dragged_slot_zone) {
+    if (dragged_slot_zone)
+    {
         dragged_slot_zone.zone_boundaries = [...drag_start]
         dragged_slot_zone = null;
     }
 
-    for (let i = 0; i < inventory_zones.length; i++) {
+    for (let i = 0; i < inventory_zones.length; i++)
+    {
         const zone = inventory_zones[i];
-        if (zone.inventory == inventory) {
+        if (zone.inventory == inventory)
+        {
             inventory_zones.splice(i, 1);
         }
     }
 
-    if (opened_player_inventory == inventory) {
+    if (opened_player_inventory == inventory)
+    {
         opened_player_inventory = null;
     }
-    if (opened_inventory == inventory) {
+    if (opened_inventory == inventory)
+    {
         opened_inventory = null;
     }
 
-    if (opened_equipped_inventory == inventory) {
+    if (opened_equipped_inventory == inventory)
+    {
         opened_equipped_inventory = null;
     }
 
@@ -941,11 +1009,11 @@ function close_inventory(inventory) {
 
 /** @type {Create_Entity} */
 const red_melee_entity = (x, y) => {
+    const melee_attack_instance = melee_attack();
     return {
         display_name: "Mean Red Square",
         x: x,
         y: y,
-        path: null,
         entity_type: 'ENEMY',
         base_stats: {
             attack_speed: 1,
@@ -954,18 +1022,29 @@ const red_melee_entity = (x, y) => {
         },
         attack_timer: ticks_per_second,
         enemy_type: Enemy_Type.RED_MELEE,
-        actions: [melee_attack()],
-        weapon: test_sword_equipment(),   
+        basic_attack: melee_attack_instance,
+        weapon: test_sword_equipment(),
+        phase: Phase.WANDERING,
+        phase_states: {
+            chasing: {
+                action: melee_attack_instance,
+                aggro_range: 10,
+                lose_range: 15,
+            },
+            wandering: {
+                range: 5
+            }
+        }
     }
 }
 
 /** @type {Create_Entity} */
 const red_bow_entity = (x, y) => {
+    const bow_attack_instance = bow_attack();
     return {
         display_name: "Mean Red Top Triangle",
         x: x,
         y: y,
-        path: null,
         entity_type: 'ENEMY',
         base_stats: {
             attack_speed: 1,
@@ -974,19 +1053,34 @@ const red_bow_entity = (x, y) => {
         },
         attack_timer: ticks_per_second,
         enemy_type: Enemy_Type.RED_BOW,
-        actions: [bow_attack()],
+        basic_attack: bow_attack_instance,
         weapon: test_bow_equipment(),
+        phase: Phase.WANDERING,
+        phase_states: {
+            chasing: {
+                action: bow_attack_instance,
+                aggro_range: 10,
+                lose_range: 17,
+            },
+            wandering: {
+                range: 5
+            },
+            kiting: {
+
+            },
+        }
 
     }
 }
 
 /** @type {Create_Entity} */
 const red_mage_entity = (x, y) => {
+    const spike_spell_instance = spike_spell();
+
     return {
         display_name: "Mean Red Bottom Triangle",
         x: x,
         y: y,
-        path: null,
         entity_type: 'ENEMY',
         base_stats: {
             attack_speed: 1,
@@ -996,7 +1090,21 @@ const red_mage_entity = (x, y) => {
         },
         attack_timer: ticks_per_second,
         enemy_type: Enemy_Type.RED_MAGE,
-        actions: [spike_spell()],
+        actions: [spike_spell_instance],
+        phase: Phase.WANDERING,
+        phase_states: {
+            chasing: {
+                action: spike_spell_instance,
+                aggro_range: 12,
+                lose_range: 20,
+            },
+            wandering: {
+                range: 5
+            },
+            kiting: {
+
+            },
+        }
 
     }
 }
@@ -1022,29 +1130,35 @@ function roll_for_table(loot_table, table_sum) {
     let increment = 0;
     let result;
     const rolled_number = Math.floor(Math.random() * table_sum);
-    for (let i = 0; i < loot_table.length; i++) {
+    for (let i = 0; i < loot_table.length; i++)
+    {
         const entry = loot_table[i];
         increment += entry[1];
-        if (rolled_number < increment) {
+        if (rolled_number < increment)
+        {
             return entry[0];
         };
     }
 }
 
 area_board = Array.from({ length: world_area_size }, () => Array(world_area_size).fill(0));
-for (let i = 0; i < world_area_size; i++) {
-    for (let j = 0; j < world_area_size; j++) {
+for (let i = 0; i < world_area_size; i++)
+{
+    for (let j = 0; j < world_area_size; j++)
+    {
         const random = Math.random();
         area_board[i][j] = random > 0.66 ? 1
             : random > 0.003 ? 0
                 : 2;
 
-        if (area_board[i][j] == 2) {
+        if (area_board[i][j] == 2)
+        {
             const equipments = [];
 
             const favour = (Math.floor((Math.random() - 0.2) * 12));
 
-            for (let i = 0; i < 20; i++) {
+            for (let i = 0; i < 20; i++)
+            {
                 const equipment = roll_for_table(chest_loot_table, table_sum * 18);
                 if (equipment) equipments.push(equipment(favour));
             }
@@ -1092,16 +1206,17 @@ const start_entites = [
     red_melee_entity(20, 20),
     red_melee_entity(30, 30),
     red_melee_entity(40, 40),
-    red_bow_entity(30,40),
-    red_bow_entity(20,40),
-    red_bow_entity(40,10),
-    red_mage_entity(15,30),
-    red_mage_entity(8,35),
-    red_mage_entity(25,30),
-    
+    red_bow_entity(30, 40),
+    red_bow_entity(20, 40),
+    red_bow_entity(40, 10),
+    red_mage_entity(15, 30),
+    red_mage_entity(8, 35),
+    red_mage_entity(25, 30),
+
 ]
 
-for (let i = 0; i < start_entites.length; i++) {
+for (let i = 0; i < start_entites.length; i++)
+{
     const entity = start_entites[i];
     add_entity(entity);
 }
@@ -1110,7 +1225,8 @@ for (let i = 0; i < start_entites.length; i++) {
 //#region --------------------------------------------------------------- Entity Management -----------------------------------
 /** @type {(entity: Entity)} */
 function calculate_entity_stats(entity) {
-    if (!entity) {
+    if (!entity)
+    {
         //console.log("No entity on calculate stats!");
         return;
     }
@@ -1119,13 +1235,15 @@ function calculate_entity_stats(entity) {
     const mana_percent = entity?.stats?.current_mana / entity?.stats?.max_mana;
 
     entity.stats = { ...entity.base_stats }
-    if (entity.equipped_items?.equipments && entity.equipped_items?.equipments.length != 0) {
+    if (entity.equipped_items?.equipments && entity.equipped_items?.equipments.length != 0)
+    {
 
         const slots_exist = entity.equipped_items == inventory_zones[2]?.inventory;
 
         const arr = slots_exist ? inventory_zones[2].slots : entity.equipped_items.equipments;
 
-        for (let i = 0; i < arr.length; i++) {
+        for (let i = 0; i < arr.length; i++)
+        {
 
             const equipment = slots_exist ? arr[i].equipment : arr[i];
 
@@ -1146,10 +1264,12 @@ function calculate_entity_stats(entity) {
         }
     }
 
-    if (entity?.stats?.current_hp) {
+    if (entity?.stats?.current_hp)
+    {
         entity.stats.current_hp = entity.stats.max_hp * hp_percent;
     }
-    if (entity?.stats?.current_mana) {
+    if (entity?.stats?.current_mana)
+    {
         entity.stats.current_mana = entity.stats.max_mana * mana_percent;
     }
 }
@@ -1158,6 +1278,14 @@ function calculate_entity_stats(entity) {
 function add_entity(entity) {
     entity.id = id_counter++;
 
+    entity.path = {
+        entity: entity,
+        path_steps: [],
+        progress: 0,
+        id: id_counter++,
+    }
+    paths.push(entity.path);
+
     if (entity.base_stats?.max_hp) entity.base_stats.current_hp = entity.base_stats.max_hp;
     if (entity.base_stats?.max_mana) entity.base_stats.current_mana = entity.base_stats.max_mana;
 
@@ -1165,10 +1293,12 @@ function add_entity(entity) {
 
     entities.push(entity);
     entity.entity_index = entities.length - 1;
-    if (entity.entity_type === 'PLAYER') {
+    if (entity.entity_type === 'PLAYER')
+    {
         player_entities.push(entity);
         entity.player_entity_index = player_entities.length - 1;
-    } else if (entity.entity_type === 'ENEMY') {
+    } else if (entity.entity_type === 'ENEMY')
+    {
         enemy_entities.push(entity);
         entity.enemy_entity_index = enemy_entities.length - 1;
     }
@@ -1185,6 +1315,10 @@ function add_player(player) {
         display_name: player.display_name,
         x: 10,
         y: 10,
+        path: {
+            path_steps: [],
+            progress: 0,
+        },
         entity_type: 'PLAYER',
         base_stats: {
             attack_speed: 0.7,
@@ -1208,7 +1342,14 @@ function add_player(player) {
             hammer_spell(),
             construct_spell(),
             spike_spell(),
-        ]
+        ],
+        phase_states: {
+            chasing: {
+            },
+            pathing: {
+
+            }
+        }
     }
 
     const player_starting_equipment = [
@@ -1266,7 +1407,8 @@ function damage_entity(combat_context) {
         time: 0,
     })
 
-    if (target_entity.stats.current_hp <= 0) {
+    if (target_entity.stats.current_hp <= 0)
+    {
         entity_on_kill(combat_context);
         entity_on_death(combat_context);
     }
@@ -1307,14 +1449,16 @@ function entity_on_death(combat_context) {
     const dying_entity = combat_context.target_entity;
     const source_entity = combat_context.source_entity;
 
-    if (source_entity.chasing_entity == dying_entity) {
+    if (source_entity.chasing_entity == dying_entity)
+    {
         source_entity.chasing_entity == undefined;
         delete source_entity.chasing_action_and_context;
     }
     entity_positions[dying_entity.x][dying_entity.y] = null;
 
     entities_marked_for_delete.push(dying_entity);
-    if (dying_entity.on_death) {
+    if (dying_entity.on_death)
+    {
         dying_entity.on_death.forEach(on_death_callback => {
             on_death_callback(combat_context);
         });
@@ -1324,7 +1468,8 @@ function entity_on_death(combat_context) {
 /** @type {(combat_context: Combat_Context)} */
 function entity_on_scored_hit(combat_context) {
     const hitting_entity = combat_context.source_entity;
-    if (hitting_entity?.on_scored_hit) {
+    if (hitting_entity?.on_scored_hit)
+    {
         hitting_entity.on_scored_hit.forEach(on_scored_hit_callback => {
             on_scored_hit_callback(combat_context);
         })
@@ -1334,7 +1479,8 @@ function entity_on_scored_hit(combat_context) {
 /** @type {(combat_context: Combat_Context)}  */
 function entity_on_taken_hit(combat_context) {
     const hit_entity = combat_context.target_entity;
-    if (hit_entity.on_taken_hit) {
+    if (hit_entity.on_taken_hit)
+    {
         hit_entity.on_taken_hit.forEach(on_taken_hit_callback => {
             on_taken_hit_callback(combat_context);
         })
@@ -1344,7 +1490,8 @@ function entity_on_taken_hit(combat_context) {
 /** @type {(combat_context: Combat_Context)} */
 function entity_on_kill(combat_context) {
     const killer_entity = combat_context.source_entity;
-    if (killer_entity?.on_kill) {
+    if (killer_entity?.on_kill)
+    {
         killer_entity.on_kill.forEach(on_kill_callback => {
             on_kill_callback(combat_context);
         })
@@ -1392,12 +1539,14 @@ function draw() {
     // Grid
     ctx.beginPath();
     ctx.lineWidth = 3;
-    for (let i = - (camera_origin[0] * zoom - canvas.width / 2) % cell_size; i < canvas.width; i += cell_size) {
+    for (let i = - (camera_origin[0] * zoom - canvas.width / 2) % cell_size; i < canvas.width; i += cell_size)
+    {
         ctx.moveTo(i, 0);
         ctx.lineTo(i, canvas.height);
     }
 
-    for (let i = - (camera_origin[1] * zoom - canvas.height / 2) % cell_size; i < canvas.height; i += cell_size) {
+    for (let i = - (camera_origin[1] * zoom - canvas.height / 2) % cell_size; i < canvas.height; i += cell_size)
+    {
         ctx.moveTo(0, i);
         ctx.lineTo(canvas.width, i);
     }
@@ -1407,16 +1556,19 @@ function draw() {
     ctx.translate(translation[0], translation[1]);
 
     // Calculate entity visual positions with path progress for this frame
-    for (let i = 0; i < entities.length; i++) {
+    for (let i = 0; i < entities.length; i++)
+    {
         const entity = entities[i];
         if (!entity) continue;
 
         entity.visual_x = entity.x * cell_size + cell_margin;
         entity.visual_y = entity.y * cell_size + cell_margin;
 
-        if (entity.path) {
+        if (entity.path && entity.path.path_steps.length > 0)
+        {
             const next_cell = entity.path.path_steps[0];
-            if (next_cell) {
+            if (next_cell)
+            {
                 entity.visual_x += cell_size * (next_cell[0] - entity.x) * entity.path.progress / ticks_per_second;
                 entity.visual_y += cell_size * (next_cell[1] - entity.y) * entity.path.progress / ticks_per_second;
             }
@@ -1429,14 +1581,18 @@ function draw() {
     const up_most_cell = Math.max(0, Math.floor((camera_origin[1] * zoom - canvas.height / 2) / cell_size));
     const down_most_cell = Math.min(world_area_size - 1, Math.floor((camera_origin[1] * zoom + canvas.height / 2) / cell_size + 1));
 
-    for (let i = right_most_cell; i >= left_most_cell; i--) {
-        for (let j = up_most_cell; j < down_most_cell; j++) {
-            if (area_board[i][j] === 1) {
+    for (let i = right_most_cell; i >= left_most_cell; i--)
+    {
+        for (let j = up_most_cell; j < down_most_cell; j++)
+        {
+            if (area_board[i][j] === 1)
+            {
                 ctx.fillStyle = 'black';
                 ctx.fillRect(i * cell_size, j * cell_size + cell_size / 2, cell_size, 0.5 * cell_size);
                 ctx.fillStyle = 'rgb(64, 64, 64, 1)'
                 ctx.fillRect(i * cell_size, (j - 0.5) * cell_size, cell_size, cell_size * 1);
-            } else if (area_board[i][j] === 2) {
+            } else if (area_board[i][j] === 2)
+            {
                 ctx.drawImage(chest_image, i * cell_size, j * cell_size, cell_size, cell_size);
             }
         }
@@ -1446,10 +1602,12 @@ function draw() {
     ctx.beginPath();
 
     // Draw visual effects
-    for (let i = 0; i < visual_effects.length; i++) {
+    for (let i = 0; i < visual_effects.length; i++)
+    {
 
         const visual_effect = visual_effects[i];
-        if (visual_effect && !visual_effect.on_top) {
+        if (visual_effect && !visual_effect.on_top)
+        {
             const entity = visual_effect.entity;
 
             const resulting_width = cell_size * visual_effect.size;
@@ -1466,9 +1624,11 @@ function draw() {
                 ctx.globalAlpha = (duration_percent > peak_at ? 1 - (duration_percent - peak_at) / (1 - peak_at)
                     : duration_percent / peak_at)
 
-            if (visual_effect.draw_callback) {
+            if (visual_effect.draw_callback)
+            {
                 visual_effect.draw_callback(visual_effect);
-            } else {
+            } else
+            {
                 ctx.drawImage(visual_effect.image,
                     cell_middle[0] - resulting_width / 2, cell_middle[1] - resulting_height / 2,
                     resulting_width, resulting_height);
@@ -1479,7 +1639,8 @@ function draw() {
     }
 
     // Draw players
-    for (let i = 0; i < players.length; i++) {
+    for (let i = 0; i < players.length; i++)
+    {
         const player = players[i];
         const entity = entities[player.entity_index];
         const x = entity.visual_x;
@@ -1492,13 +1653,15 @@ function draw() {
 
     // Draw paths
     ctx.lineWidth = 2;
-    for (let i = 0; i < paths.length; i++) {
+    for (let i = 0; i < paths.length; i++)
+    {
         const path = paths[i];
-        if (player_entity.path != path) continue;
+        if (player_entity.path != path || path.path_steps.length == 0) continue;
         ctx.beginPath();
         ctx.strokeStyle = 'green';
         ctx.moveTo(path?.path_steps[0][0] * cell_size + cell_size / 2, path?.path_steps[0][1] * cell_size + cell_size / 2);
-        for (let j = 1; j < path?.path_steps.length; j++) {
+        for (let j = 1; j < path?.path_steps.length; j++)
+        {
             const step = path.path_steps[j];
             ctx.lineTo(step[0] * cell_size + cell_size / 2, step[1] * cell_size + cell_size / 2);
         }
@@ -1506,7 +1669,8 @@ function draw() {
     }
 
     const entity_on_hovered_cell = hovered_cell ? entity_positions[hovered_cell[0]][hovered_cell[1]] : null;
-    if (entity_on_hovered_cell) {
+    if (entity_on_hovered_cell)
+    {
         hovered_entity = entity_on_hovered_cell;
         time_since_entity_hovered = 0;
     }
@@ -1514,31 +1678,36 @@ function draw() {
     // Draw entities
     ctx.lineWidth = 3;
 
-    for (let i = 0; i < entities.length; i++) {
+    for (let i = 0; i < entities.length; i++)
+    {
         const entity = entities[i];
         if (!entity) continue;
 
-        if (entity.next_x && hovered_cell
+        if (time_since_entity_hovered != 0 && entity.next_x && hovered_cell
             && hovered_cell[0] == entity.x + Math.sign(entity.next_x - entity.x)
-            && hovered_cell[1] == entity.y + Math.sign(entity.next_y - entity.y)) {
+            && hovered_cell[1] == entity.y + Math.sign(entity.next_y - entity.y))
+        {
             hovered_entity = entity;
             time_since_entity_hovered = 0;
         }
 
-        if (entity.entity_type != 'PLAYER') {
+        if (entity.entity_type != 'PLAYER')
+        {
             const entity_size = cell_size - cell_margin * 2;
             const x = entity.visual_x;
             const y = entity.visual_y;
 
-            if (entity.enemy_type == Enemy_Type.RED_MELEE) {
+            if (entity.enemy_type == Enemy_Type.RED_MELEE)
+            {
                 ctx.fillStyle = 'red';
                 ctx.fillRect(x, y, entity_size, entity_size);
 
                 ctx.strokeStyle = hovered_entity == entity ? 'orange' : 'black';
                 ctx.strokeRect(x, y, entity_size, entity_size);
 
-            } else if (entity.enemy_type == Enemy_Type.RED_BOW) {
-                ctx.fillStyle= 'red';
+            } else if (entity.enemy_type == Enemy_Type.RED_BOW)
+            {
+                ctx.fillStyle = 'red';
                 ctx.moveTo(x, y);
                 ctx.beginPath();
                 ctx.strokeStyle = hovered_entity == entity ? 'orange' : 'black';
@@ -1548,8 +1717,9 @@ function draw() {
                 ctx.closePath();
                 ctx.fill();
                 ctx.stroke();
-            } else if(entity.enemy_type == Enemy_Type.RED_MAGE) {
-                ctx.fillStyle= 'red';
+            } else if (entity.enemy_type == Enemy_Type.RED_MAGE)
+            {
+                ctx.fillStyle = 'red';
                 ctx.moveTo(x, y + entity_size);
                 ctx.beginPath();
                 ctx.strokeStyle = hovered_entity == entity ? 'orange' : 'black';
@@ -1579,17 +1749,20 @@ function draw() {
 
     if (time_since_entity_hovered >= 15) hovered_entity = null;
 
-    if (hovered_cell) {
+    if (hovered_cell)
+    {
         ctx.strokeStyle = 'orange';
         ctx.strokeRect(hovered_cell[0] * cell_size, hovered_cell[1] * cell_size, cell_size, cell_size);
     }
     ctx.closePath();
     ctx.beginPath();
 
-    for (let i = 0; i < visual_effects.length; i++) {
+    for (let i = 0; i < visual_effects.length; i++)
+    {
 
         const visual_effect = visual_effects[i];
-        if (visual_effect && visual_effect.on_top) {
+        if (visual_effect && visual_effect.on_top)
+        {
             const entity = visual_effect.entity;
 
             const resulting_width = cell_size * visual_effect.size;
@@ -1606,9 +1779,11 @@ function draw() {
                 ctx.globalAlpha = (duration_percent > peak_at ? 1 - (duration_percent - peak_at) / (1 - peak_at)
                     : duration_percent / peak_at)
 
-            if (visual_effect.draw_callback) {
+            if (visual_effect.draw_callback)
+            {
                 visual_effect.draw_callback(visual_effect);
-            } else {
+            } else
+            {
                 ctx.drawImage(visual_effect.image,
                     cell_middle[0] - resulting_width / 2, cell_middle[1] - resulting_height / 2,
                     resulting_width, resulting_height);
@@ -1662,7 +1837,8 @@ function draw() {
 
 
     // HP & Mana numbers
-    if (player_entity) {
+    if (player_entity)
+    {
         ctx.font = '20px "Press Start 2P"';
         ctx.fillStyle = '#00FF00';
         ctx.textAlign = 'center';
@@ -1682,7 +1858,8 @@ function draw() {
     ctx.drawImage(slot_image, weapon_slot.x, weapon_slot.y, weapon_slot.width, weapon_slot.height);
 
     const zone_boundaries = weapon_slot.zone_boundaries;
-    if (player_entity.weapon) {
+    if (player_entity.weapon)
+    {
         draw_image_boundaries(player_entity.weapon.image, zone_boundaries);
 
         ctx.fillStyle = 'rgb(0,0,0,0.7';
@@ -1696,13 +1873,16 @@ function draw() {
 
     // Action Slots
     ctx.fillStyle = 'rgb(0,0,0,0.7)'
-    if (!inventory_zones[2].visible) {
+    if (!inventory_zones[2].visible)
+    {
         draw_image_boundaries(actions_slots_image, action_slots_boundaries);
 
-        for (let i = 0; i < action_slots.length; i++) {
+        for (let i = 0; i < action_slots.length; i++)
+        {
             const slot = action_slots[i];
             ctx.drawImage(action_slot_info.image, slot.x, slot.y, slot.width, slot.height);
-            if (slot.action?.image) {
+            if (slot.action?.image)
+            {
                 const b = slot.zone_boundaries;
                 draw_image_boundaries(slot.action.image, b);
                 const cooldown_percent = 1 - Math.min(1, (tick_counter - slot.action.cooldown_date) / slot.action.cooldown);
@@ -1712,22 +1892,26 @@ function draw() {
     }
 
     // Inventory
-    for (let i = 0; i < inventory_zones.length; i++) {
+    for (let i = 0; i < inventory_zones.length; i++)
+    {
         const inventory_zone = inventory_zones[i];
         if (!inventory_zone.visible) continue;
 
         draw_image_boundaries(inventory_zone.image, inventory_zone.boundaries);
         const slot_img = inventory_zone.slot_info.image;
 
-        for (let j = 0; j < inventory_zone.slots.length; j++) {
+        for (let j = 0; j < inventory_zone.slots.length; j++)
+        {
             const slot = inventory_zone.slots[j];
 
-            if (slot_img) {
+            if (slot_img)
+            {
                 ctx.drawImage(slot_img, slot.x, slot.y, slot.width, slot.height);
             }
 
             const equipment = slot.equipment;
-            if (equipment) {
+            if (equipment)
+            {
                 draw_image_boundaries(equipment.image, slot.zone_boundaries);
             }
         }
@@ -1736,14 +1920,17 @@ function draw() {
     let hovered_equipment;
 
     // Equipment Info in Inventory
-    if (inventory_zones[0].visible) {
+    if (inventory_zones[0].visible)
+    {
         draw_image_boundaries(info_image, info_boundaries);
 
 
-        if (hovered_slot || dragged_slot_zone) {
+        if (hovered_slot || dragged_slot_zone)
+        {
 
             const equipment = hovered_slot?.equipment || dragged_slot_zone?.equipment;
-            if (equipment) {
+            if (equipment)
+            {
                 hovered_equipment = equipment;
                 const keys = Object.keys(equipment.flat_stats);
                 const boundaries = info_zone_boundaries;
@@ -1754,7 +1941,8 @@ function draw() {
                 const flat_stat_keys = Object.keys(equipment.flat_stats);
                 flat_stat_keys.forEach((key) => {
                     const value = equipment.flat_stats[key];
-                    if (!strings[key]) {
+                    if (!strings[key])
+                    {
                         strings[key] = "" + (Stat_Display_Names[key] || key) + ": "
                     }
 
@@ -1764,9 +1952,11 @@ function draw() {
                 const multiplicative_stat_keys = Object.keys(equipment.multiplicative_stats);
                 multiplicative_stat_keys.forEach((key) => {
                     const value = equipment.multiplicative_stats[key];
-                    if (!strings[key]) {
+                    if (!strings[key])
+                    {
                         strings[key] = "" + (Stat_Display_Names[key] || key) + ": "
-                    } else {
+                    } else
+                    {
                         strings[key] += " | "
                     }
 
@@ -1791,7 +1981,8 @@ function draw() {
                 ctx.font = '20px "Press Start 2P"';
 
                 const str_keys = Object.keys(strings);
-                for (let i = 0; i < str_keys.length; i++) {
+                for (let i = 0; i < str_keys.length; i++)
+                {
                     const str = strings[str_keys[i]];
                     ctx.fillText(str, boundaries[0], line_height, boundaries[2] - boundaries[0]);
                     line_height += 30
@@ -1801,18 +1992,22 @@ function draw() {
         }
 
         // Comparison with hovered equipment
-        if (hovered_equipment) {
+        if (hovered_equipment)
+        {
             let hovered_is_usefull = false;
 
-            for (let i = 0; i < inventory_zones.length; i++) {
+            for (let i = 0; i < inventory_zones.length; i++)
+            {
                 const inventory_zone = inventory_zones[i];
                 if (!inventory_zone.visible) continue;
 
-                for (let j = 0; j < inventory_zone.slots.length; j++) {
+                for (let j = 0; j < inventory_zone.slots.length; j++)
+                {
                     const slot = inventory_zone.slots[j];
 
                     const equipment = slot.equipment;
-                    if (equipment && equipment.name == hovered_equipment.name && equipment != hovered_equipment) {
+                    if (equipment && equipment.name == hovered_equipment.name && equipment != hovered_equipment)
+                    {
 
                         let has_worse_stat = false;
                         let has_better_stat = false;
@@ -1820,7 +2015,8 @@ function draw() {
 
                         eq_f_keys = Object.keys(equipment.flat_stats);
 
-                        for (let i = 0; i < eq_f_keys.length; i++) {
+                        for (let i = 0; i < eq_f_keys.length; i++)
+                        {
                             const key = eq_f_keys[i];
 
                             const e_stat = equipment.flat_stats[key];
@@ -1838,7 +2034,8 @@ function draw() {
 
                         eq_m_keys = Object.keys(equipment.multiplicative_stats);
 
-                        for (let i = 0; i < eq_m_keys.length; i++) {
+                        for (let i = 0; i < eq_m_keys.length; i++)
+                        {
                             const key = eq_m_keys[i];
 
                             const e_stat = equipment.multiplicative_stats[key];
@@ -1858,7 +2055,8 @@ function draw() {
                             ctx.fillStyle = 'rgb(128,128,128,0.7)';
                         else if (has_worse_stat && has_better_stat)
                             ctx.fillStyle = 'rgb(128,128,0,0.7)';
-                        else if (has_worse_stat) {
+                        else if (has_worse_stat)
+                        {
                             ctx.fillStyle = 'rgb(128,0,0,0.7)';
                             if (slot.inventory != hovered_slot?.inventory) hovered_is_usefull = true;
                         }
@@ -1876,7 +2074,8 @@ function draw() {
                 }
             }
 
-            if (hovered_is_usefull && hovered_slot && !dragged_slot_zone) {
+            if (hovered_is_usefull && hovered_slot && !dragged_slot_zone)
+            {
                 const boundaries = hovered_slot.zone_boundaries;
                 ctx.fillStyle = 'rgb(0,128,0,0.5)';
                 ctx.fillRect(boundaries[0], boundaries[1], boundaries[2] - boundaries[0], boundaries[3] - boundaries[1]);
@@ -1898,14 +2097,16 @@ function draw() {
         const strings = {};
         stats_keys.forEach((key) => {
             const value = player_entity.stats[key];
-            if (!strings[key] && Stat_Display_Names[key] != null) {
+            if (!strings[key] && Stat_Display_Names[key] != null)
+            {
                 strings[key] = "" + (Stat_Display_Names[key]) + ": "
                 strings[key] += value.toFixed(1);
             }
         })
 
         const str_keys = Object.keys(strings);
-        for (let i = 0; i < str_keys.length; i++) {
+        for (let i = 0; i < str_keys.length; i++)
+        {
             const str = strings[str_keys[i]];
             if (str)
                 ctx.fillText(str, info_zone_boundaries[0], line_height, info_zone_boundaries[2] - info_zone_boundaries[0]);
@@ -1948,9 +2149,11 @@ function draw_equipped_items(entity, x, y, zoom) {
     /** @type {Set<HTMLImageElement} */
     const images = new Set();
 
-    for (let j = 0; j < entity.equipped_items.equipments.length; j++) {
+    for (let j = 0; j < entity.equipped_items.equipments.length; j++)
+    {
         const equipment = entity.equipped_items.equipments[j];
-        if (equipment?.image) {
+        if (equipment?.image)
+        {
             images.add(equipment.image);
         }
     }
@@ -2023,31 +2226,39 @@ const keys_typed = {
 }
 
 function updateCamera() {
-    if (keys_pressed.w) {
+    if (keys_pressed.w)
+    {
         camera_origin[1] -= camera_speed;
     }
-    if (keys_pressed.a) {
+    if (keys_pressed.a)
+    {
         camera_origin[0] -= camera_speed
     }
-    if (keys_pressed.s) {
+    if (keys_pressed.s)
+    {
         camera_origin[1] += camera_speed;
     }
-    if (keys_pressed.d) {
+    if (keys_pressed.d)
+    {
         camera_origin[0] += camera_speed;
     }
 }
 
 function handle_inputs() {
-    if (keys_pressed.space) {
+    if (keys_pressed.space)
+    {
         camera_origin[0] = (player_entity?.x * cell_size + cell_size / 2) / zoom;
         camera_origin[1] = (player_entity?.y * cell_size + cell_size / 2) / zoom;
     }
-    left_mouse_button: if (keys_typed.left_mouse_button) {
+    left_mouse_button: if (keys_typed.left_mouse_button)
+    {
         keys_typed.left_mouse_button = false;
 
-        if (inventory_zones[0].visible || inventory_zones[1].visible) {
+        if (inventory_zones[0].visible || inventory_zones[1].visible)
+        {
             console.log('hovered', hovered_slot)
-            if (hovered_slot && hovered_slot.equipment) {
+            if (hovered_slot && hovered_slot.equipment)
+            {
                 dragged_slot_zone = hovered_slot;
                 console.log('start drag');
                 drag_start = [...hovered_slot.zone_boundaries];
@@ -2061,30 +2272,29 @@ function handle_inputs() {
             Math.floor((mouse_position[1] - translation[1]) / cell_size)
         ]
 
-        player_entity.chasing_entity = undefined;
-        player_entity.chasing_action_and_context = undefined;
+        player_entity.phase = Phase.PATHING;
 
-        if (keys_pressed.shift && player_path) {
+        if (keys_pressed.shift && player_path)
+        {
             const existing_path = player_path;
             const last_step = existing_path.path_steps[existing_path.path_steps.length - 1];
             const path_steps = calculate_path_positions([last_step[0], last_step[1]], clicked_cell);
 
-            if (path_steps != null) {
-                change_path(player_entity, path_steps, true);
-            }
-        } else {
+            if (path_steps != null) change_path(player_entity, path_steps, true);
+        } else
+        {
             const path_steps = calculate_path_positions([player_entity.x, player_entity.y], clicked_cell);
             //console.log('path', path);
 
-            if (path_steps != null) {
-                change_path(player_entity, path_steps);
-            }
+            if (path_steps != null) change_path(player_entity, path_steps);
         }
 
     }
 
-    if (keys_pressed.left_mouse_button) {
-        if (dragged_slot_zone) {
+    if (keys_pressed.left_mouse_button)
+    {
+        if (dragged_slot_zone)
+        {
             const boundaries = dragged_slot_zone.zone_boundaries;
             const zone_width = boundaries[2] - boundaries[0];
             const zone_height = boundaries[3] - boundaries[1];
@@ -2094,20 +2304,26 @@ function handle_inputs() {
             boundaries[3] = mouse_position[1] + zone_height / 2;
 
         }
-    } else if (!keys_pressed.left_mouse_button) {
-        if (dragged_slot_zone) {
+    } else if (!keys_pressed.left_mouse_button)
+    {
+        if (dragged_slot_zone)
+        {
             let moved = false;
-            transfer_eq: for (let i = 0; i < inventory_zones.length; i++) {
+            transfer_eq: for (let i = 0; i < inventory_zones.length; i++)
+            {
                 const zone = inventory_zones[i];
 
-                for (let j = 0; j < zone.slots.length; j++) {
+                for (let j = 0; j < zone.slots.length; j++)
+                {
                     const slot = zone.slots[j];
                     const boundaries = slot.zone_boundaries;
 
                     const mouse_inside = mouse_position[0] > boundaries[0] && mouse_position[0] < boundaries[2]
                         && mouse_position[1] > boundaries[1] && mouse_position[1] < boundaries[3];
-                    if (mouse_inside) {
-                        if (slot != dragged_slot_zone) {
+                    if (mouse_inside)
+                    {
+                        if (slot != dragged_slot_zone)
+                        {
                             transfer_equipment(dragged_slot_zone, slot, dragged_slot_zone.equipment);
 
                             moved = true;
@@ -2125,12 +2341,15 @@ function handle_inputs() {
     }
 
 
-    right_mouse_button: if (keys_typed.right_mouse_button) {
+    right_mouse_button: if (keys_typed.right_mouse_button)
+    {
         keys_typed.right_mouse_button = false;
 
-        if (inventory_zones[0].visible || inventory_zones[1].visible) {
+        if (inventory_zones[0].visible || inventory_zones[1].visible)
+        {
 
-            if (hovered_slot && hovered_slot.inventory != inventory_zones[2].inventory && hovered_slot.equipment) {
+            if (hovered_slot && hovered_slot.inventory != inventory_zones[2].inventory && hovered_slot.equipment)
+            {
                 const new_slot = inventory_zones[2].slots.find((slot) => {
                     const equipment = slot.equipment;
                     return equipment?.type == hovered_slot.equipment.type;
@@ -2138,43 +2357,48 @@ function handle_inputs() {
                 if (new_slot) transfer_equipment(hovered_slot, new_slot, hovered_slot.equipment);
             }
 
-        } else {
-
-            player_entity.chasing_entity = undefined;
-            player_entity.chasing_action_and_context = undefined;
-
+        } else
+        {
             const target_entity = hovered_entity;
             if (!target_entity) break right_mouse_button;
             const context = { target_entity, source_entity: player_entity }
             //if (get_distance(context) >= 1.5) {
-            chase_entity(player_entity, target_entity, player_entity.basic_attack);
+            player_entity.phase = Phase.CHASING;
+            player_entity.phase_states.chasing.action = player_entity.basic_attack;
+            player_entity.phase_states.chasing.target = target_entity;
             //}
             //take_action(context, player_entity.basic_attack);
         }
     }
 
-    if (keys_typed.e) {
+    if (keys_typed.e)
+    {
         keys_typed.e = false;
 
         const cell = area_board[player_entity.x][player_entity.y];
-        if (inventory_zones[1].visible) {
+        if (inventory_zones[1].visible)
+        {
             inventory_zones[0].visible = false;
             inventory_zones[1].visible = false;
             inventory_zones[2].visible = false;
-        } else if (cell == 2) {
+        } else if (cell == 2)
+        {
             opened_inventory = chest_inventories.get(player_entity.x + " " + player_entity.y);
 
             init_slots(inventory_zones[1], opened_inventory);
             inventory_zones[1].visible = true;
             if (!opened_player_inventory) inventory_zones[0].visible = true;
 
-            if (!opened_equipped_inventory) {
+            if (!opened_equipped_inventory)
+            {
                 inventory_zones[2].visible = true;
             }
-        } else if (inventory_zones[0].visible) {
+        } else if (inventory_zones[0].visible)
+        {
             inventory_zones[0].visible = false;
             inventory_zones[2].visible = false;
-        } else if (!inventory_zones[0].visible) {
+        } else if (!inventory_zones[0].visible)
+        {
             inventory_zones[0].visible = true;
             inventory_zones[2].visible = true;
         }
@@ -2183,23 +2407,29 @@ function handle_inputs() {
     }
 
     // 1 -9
-    for (let i = 1; i <= 9; i++) {
-        if (keys_typed[i]) {
+    for (let i = 1; i <= 9; i++)
+    {
+        if (keys_typed[i])
+        {
             keys_typed[i] = false;
 
-            if (inventory_zones[0].visible || inventory_zones[1].visible) {
+            if (inventory_zones[0].visible || inventory_zones[1].visible)
+            {
 
-                if (hovered_slot /* && hovered_slot.inventory != inventory_zones[2].inventory */) {
+                if (hovered_slot /* && hovered_slot.inventory != inventory_zones[2].inventory */)
+                {
                     const new_slot = inventory_zones[2].slots[i - 1];
                     if (new_slot) transfer_equipment(hovered_slot, new_slot, hovered_slot.equipment);
                 }
 
-            } else {
+            } else
+            {
                 keys_typed[i] = false;
                 const action = action_slots[i - 1].action;
-                const target_entity = hovered_entity;
+                const target_entity = keys_pressed.shift ? player_entity : hovered_entity;
                 const context = { target_entity, source_entity: player_entity }
-                if (action) {
+                if (action)
+                {
                     take_action(context, action);
                 }
             }
@@ -2212,7 +2442,8 @@ function handle_inputs() {
 window.addEventListener('keydown', (event) => {
     const key = event.key;
     // console.log('key', key.toLowerCase());
-    switch (key.toLowerCase()) {
+    switch (key.toLowerCase())
+    {
         case 'w':
             keys_pressed.w = true;
             break;
@@ -2243,7 +2474,8 @@ window.addEventListener('keydown', (event) => {
 window.addEventListener('keyup', (event) => {
     const key = event.key;
     keys_pressed[key.toLowerCase()] = false;
-    switch (key.toLowerCase()) {
+    switch (key.toLowerCase())
+    {
         case 'w':
             keys_pressed.w = false;
             break;
@@ -2270,7 +2502,8 @@ window.addEventListener('keyup', (event) => {
 
 window.addEventListener('mousedown', (event) => {
     event.preventDefault();
-    switch (event.button) {
+    switch (event.button)
+    {
 
         case 0: // Left mouse button
             keys_typed.left_mouse_button = true;
@@ -2289,7 +2522,8 @@ window.addEventListener('mousedown', (event) => {
 
 window.addEventListener('mouseup', (event) => {
     event.preventDefault();
-    switch (event.button) {
+    switch (event.button)
+    {
         case 0: // Left mouse button            
             keys_pressed.left_mouse_button = false;
             break;
@@ -2309,11 +2543,13 @@ window.addEventListener('contextmenu', (event) => {
 });
 
 window.addEventListener("wheel", (event) => {
-    if (event.deltaY < 0 && cell_size < 320) {
+    if (event.deltaY < 0 && cell_size < 320)
+    {
         cell_size *= 2;
         cell_margin *= 2;
         zoom = cell_size / 40.0;
-    } else if (event.deltaY > 0 && cell_size > 5) {
+    } else if (event.deltaY > 0 && cell_size > 5)
+    {
         cell_size /= 2;
         cell_margin /= 2;
         zoom = cell_size / 40.0;
@@ -2340,12 +2576,14 @@ function tick() {
 
     let found = false;
 
-    find_hovered: for (let i = 0; i < inventory_zones.length; i++) {
+    find_hovered: for (let i = 0; i < inventory_zones.length; i++)
+    {
         const inventory_zone = inventory_zones[i];
         if (!inventory_zone.visible) continue;
 
         //console.log('i',i);
-        for (let j = 0; j < inventory_zone.slots.length; j++) {
+        for (let j = 0; j < inventory_zone.slots.length; j++)
+        {
 
             const slot = inventory_zone.slots[j];
             const zone_b = slot.zone_boundaries;
@@ -2353,7 +2591,8 @@ function tick() {
             const mouse_inside = mouse_position[0] > zone_b[0] && mouse_position[0] < zone_b[2]
                 && mouse_position[1] > zone_b[1] && mouse_position[1] < zone_b[3];
 
-            if (mouse_inside) {
+            if (mouse_inside)
+            {
                 //console.log('Mouse inside zone', slot, mouse_position);
                 hovered_slot = slot;
                 found = true;
@@ -2367,17 +2606,22 @@ function tick() {
     handle_inputs();
 
     // Process visual effects
-    for (let i = 0; i < visual_effects.length; i++) {
+    for (let i = 0; i < visual_effects.length; i++)
+    {
         const visual_effect = visual_effects[i];
         visual_effect.time += 1;
-        if (visual_effect.time >= visual_effect.duration) {
+        if (visual_effect.time >= visual_effect.duration)
+        {
             visual_effects.splice(i, 1);
             continue;
         }
-        if (visual_effect.tick_callback) {
+        if (visual_effect.tick_callback)
+        {
             visual_effect.tick_callback(visual_effect);
-        } else {
-            if (visual_effect.destination) {
+        } else
+        {
+            if (visual_effect.destination)
+            {
                 const direction = [visual_effect.destination[0] - visual_effect.x, visual_effect.destination[1] - visual_effect.y];
                 const remaining_time = (visual_effect.duration - visual_effect.time);
                 visual_effect.x += direction[0] / remaining_time;
@@ -2387,11 +2631,13 @@ function tick() {
     }
 
     // Process scheduled callbacks
-    for (let i = 0; i < scheduled_callbacks.length; i++) {
+    for (let i = 0; i < scheduled_callbacks.length; i++)
+    {
         const scheduled_callback = scheduled_callbacks[i];
         if (tick_counter < scheduled_callback.tick_date) continue;
 
-        for (let j = 0; j < scheduled_callback.callbacks.length; j++) {
+        for (let j = 0; j < scheduled_callback.callbacks.length; j++)
+        {
             const callback = scheduled_callback.callbacks[j];
             const context = scheduled_callback.contexts.length - 1 >= j ? scheduled_callback.contexts[j] : scheduled_callback.contexts[0];
             callback(context);
@@ -2402,107 +2648,57 @@ function tick() {
     }
 
     // Process paths
-    for (let i = 0; i < paths.length; i++) {
+    for (let i = 0; i < paths.length; i++)
+    {
         const path = paths[i];
-        const entity = entities[path.entity_index];
-        if (!entity) {
+        const entity = path.entity;
+        if (!entity)
+        {
             paths.splice(i, 1);
             delete path;
             continue;
         }
 
-        let chasing_needs_pathing = true;
-        if (entity.chasing_action_and_context) {
-            const requirement_failed = take_action(entity.chasing_action_and_context.context, entity.chasing_action_and_context.action)
-            if (requirement_failed != in_range_requirement) chasing_needs_pathing = false;
+        if (path.path_steps.length === 0) continue;
+
+
+        const pos = path.path_steps[0];
+        entity.next_x = pos[0];
+        entity.next_y = pos[1];
+        path.progress += entity.stats.movement_speed;
+
+        const blocked_by_entity = entity_positions[pos[0]][pos[1]];
+        if (blocked_by_entity && blocked_by_entity != entity) path.progress = 0;
+
+        const fully_progressed = path.progress >= ticks_per_second;
+        if (fully_progressed) move: {
+            path.progress -= ticks_per_second;
+            path.path_steps.shift();
+
+            entity_positions[entity.x][entity.y] = null;
+
+            entity.x = pos[0];
+            entity.y = pos[1];
+            entity_positions[entity.x][entity.y] = entity;
         }
 
-        if (entity.chasing_entity && chasing_needs_pathing) {
-            path_steps = calculate_path_positions([entity.x, entity.y], [entity.chasing_entity.x, entity.chasing_entity.y]);
-            if (path_steps) change_path(entity, path_steps);
-        }
-
-        if (path.path_steps[0] && chasing_needs_pathing) {
-            const pos = path.path_steps[0];
-            entity.next_x = pos[0];
-            entity.next_y = pos[1];
-
-            const blocked_by_entity = entity_positions[pos[0]][pos[1]];
-
-            if (!blocked_by_entity || blocked_by_entity == entity) {
-                path.progress += entity.stats.movement_speed;
-
-                if (path.progress >= ticks_per_second) {
-                    path.progress -= ticks_per_second;
-                    path.path_steps.shift();
-
-                    entity_positions[entity.x][entity.y] = null;
-
-                    entity.x = pos[0];
-                    entity.y = pos[1];
-                    entity_positions[entity.x][entity.y] = entity;
-
-                }
-
-            } else {
-                // console.log('blocked by entity', blocked_by_entity.id, entity.id);
-
-                if (entity.chasing_action_and_context && blocked_by_entity.entity_type != 'ENEMY')
-                    take_action({ ...entity.chasing_action_and_context.context, target_entity: blocked_by_entity }, entity.chasing_action_and_context.action);
-                path.progress = 0;
-            }
-
-        }
-
-        if (path.path_steps.length === 0) {
-            paths.splice(i, 1);
-            entity.path = null;
-            if (path == player_path) {
-                player_path = null;
-            }
-            delete path;
-            i--;
-        }
     }
 
     // Entity attack timer
-    for (let i = 0; i < entities.length; i++) {
+    for (let i = 0; i < entities.length; i++)
+    {
         const entity = entities[i];
         if (!entity) continue;
         entity.attack_timer += 1;
     }
 
-    // Entity movement choice
-    for (let i = 0; i < enemy_entities.length; i++) {
-        const entity = enemy_entities[i];
-        if (!entity) continue;
-        const distance_to_players = player_entities.map(player_entity => {
-            return Math.sqrt(Math.pow(entity.x - player_entity.x, 2) + Math.pow(entity.y - player_entity.y, 2));
-        });
-
-        const closest_player_index = distance_to_players.indexOf(Math.min(...distance_to_players));
-        if (closest_player_index != -1) {
-            const closest_player_entity = player_entities[closest_player_index];
-            entity.target_cell = [closest_player_entity.x, closest_player_entity.y];
-            const distance_to_closest_player = distance_to_players[closest_player_index];
-            if (distance_to_closest_player < 10) {
-                
-                chase_entity(entity, closest_player_entity, entity.actions[0]);
-            }
-        }
-
-        if (!entity.path) {
-            //console.log('entity not player', entity);
-            const path = calculate_path_positions([entity.x, entity.y], [get_random_int(entity.x - 5, entity.x + 5), get_random_int(entity.y - 5, entity.y + 5)]);
-            if (path != null) {
-                change_path(entity, path);
-            }
-        }
-    }
+    process_player();
+    process_enemy_ai();
 
     // Delete dead entities
     const delete_length = entities_marked_for_delete.length;
-    for (let i = delete_length - 1; i >= 0; i--) {
+    for (let i = delete_length - 1; i >= 0; i--)
+    {
         const entity = entities_marked_for_delete[i];
         //console.log('entity for delete', entity);
         entities[entity.entity_index] = undefined;
@@ -2516,36 +2712,201 @@ function tick() {
     tick_counter++;
 }
 
+function process_player() {
+    if (player_entity.phase == Phase.CHASING)
+        process_standard_chasing(player_entity);
+}
+
+function process_enemy_ai() {
+    for (let i = 0; i < enemy_entities.length; i++)
+    {
+        const entity = enemy_entities[i];
+        if (!entity) continue;
+
+        const distance_to_players = player_entities.map(player_entity => {
+            return Math.sqrt(Math.pow(entity.x - player_entity.x, 2) + Math.pow(entity.y - player_entity.y, 2));
+        });
+
+        const closest_player_index = distance_to_players.indexOf(Math.min(...distance_to_players));
+        const closest_player_entity = player_entities[closest_player_index];
+        const distance_to_closest_player = distance_to_players[closest_player_index];
+
+        entity.target_cell = [closest_player_entity.x, closest_player_entity.y];
+
+        const { aggro_range: chase_aggro_range, lose_range: chase_lose_range } = entity.phase_states.chasing;
+        const phase = entity.phase;
+
+        chasing: if (phase == Phase.CHASING)
+        {
+
+            if (entity.enemy_type == Enemy_Type.RED_MELEE)
+            {
+                process_standard_chasing(entity);
+
+                if (distance_to_closest_player > chase_lose_range)
+                    entity.phase = Phase.WANDERING;
+
+            }
+            else if (entity.enemy_type == Enemy_Type.RED_BOW)
+            {
+                process_standard_chasing(entity);
+
+                if (distance_to_closest_player > chase_lose_range)
+                    entity.phase = Phase.WANDERING;
+
+                if (distance_to_closest_player < entity.basic_attack.range / 2)
+                {
+                    entity.phase = Phase.KITING;
+                    entity.phase_states.kiting.action = entity.phase_states.chasing.action;
+                    entity.phase_states.kiting.target = entity.phase_states.chasing.target;
+                    entity.path.path_steps = [];
+                }
+
+            }
+            else if (entity.enemy_type == Enemy_Type.RED_MAGE)
+            {
+
+                process_standard_chasing(entity);
+
+                const action = entity.actions[0];
+                const cooldown_up = tick_counter - action.cooldown_date >= action.cooldown;
+
+                const failed_action = try_action({ source_entity: entity, target_entity: closest_player_entity }, action);
+
+                if (distance_to_closest_player < action.range / 2)
+                {
+                    entity.phase = Phase.KITING;
+                    entity.phase_states.kiting.action = entity.phase_states.chasing.action;
+                    entity.phase_states.kiting.target = entity.phase_states.chasing.target;
+                    entity.path.path_steps = [];
+                }
+
+            }
+
+        }
+        else wandering: if (phase == Phase.WANDERING)
+        {
+            process_standard_wandering(entity);
+
+            if (distance_to_closest_player < chase_aggro_range)
+            {
+                entity.phase = Phase.CHASING;
+                entity.phase_states.chasing.target = closest_player_entity;
+            }
+        }
+        else kiting: if (phase == Phase.KITING)
+        {
+            process_standard_kiting(entity);
+
+            if (entity.enemy_type == Enemy_Type.RED_BOW)
+            {
+                if (distance_to_closest_player >= entity.basic_attack.range / 2)
+                    entity.phase = Phase.CHASING;
+            }
+            else if (entity.enemy_type == Enemy_Type.RED_MAGE)
+            {
+                if (distance_to_closest_player >= entity.phase_states.chasing.action.range / 2)
+                    entity.phase = Phase.CHASING;
+            }
+
+        }
+
+        entity.phase_states.new_phase_change = phase != entity.phase;
+    }
+}
+
+/** @type {(entity: Entity)} */
+function process_standard_wandering(entity) {
+    if (entity.path.path_steps.length != 0) return;
+
+    const range = entity.phase_states.wandering.range;
+
+    const path = calculate_path_positions([entity.x, entity.y],
+        [get_random_int(entity.x - range, entity.x + range), get_random_int(entity.y - range, entity.y + range)]);
+
+    if (path != null) change_path(entity, path);
+
+}
+
+/** @type {(entity: Entity)} */
+function process_standard_chasing(entity) {
+    const { target, action } = entity.phase_states.chasing;
+    if (!target) throw new Error;
+    if (!action) throw new Error;
+    // console.log('chase_entity', entity.id, target_entity.id);
+
+    /** @type {Context} */
+    const context = {
+        source_entity: entity,
+        target_entity: target
+    }
+
+    const action_failed = take_action(context, action);
+
+    if (action_failed == null ||
+        (action_failed != in_cell_range_requirement &&
+            action_failed != in_range_requirement))
+    {
+        entity.path.path_steps = [];
+        return;
+    }
+
+    const path_steps = calculate_path_positions([entity.x, entity.y], [target.x, target.y]);
+    if (path_steps != null) change_path(entity, path_steps);
+
+}
+
+/** @type {(entity: Entity)} */
+function process_standard_kiting(entity) {
+    // if (entity.path.path_steps.length != 0) return;
+    const { target, action } = entity.phase_states.kiting;
+    if (!target) throw e;
+    if (!action) throw e;
+
+    /** @type {Context} */
+    const context = {
+        source_entity: entity,
+        target_entity: target
+    }
+
+    const action_failed = take_action(context, action);
+
+    const random = Math.random();
+    const chance = entity.phase_states.new_phase_change ? 1 / 5 : 1 / 20;
+    if (random < 1 / 20 || entity.path.path_steps.length == 0)
+    {
+        const direction_to_player = [target.x - entity.x, target.y - entity.y];
+        const destination_x = Math.floor(entity.x - Math.sign(direction_to_player[0]) * (3 + Math.random() * 6));
+        const destination_y = Math.floor(entity.y - Math.sign(direction_to_player[1]) * (3 + Math.random() * 6));
+        const path_steps = calculate_path_positions([entity.x, entity.y], [destination_x, destination_y]);
+        if (path_steps != null) change_path(entity, path_steps);
+    }
+}
+
 /** @type {(entity: Entity, path_steps: Array<Position>) } */
 function change_path(entity, path_steps, append = false) {
     const existing_path = entity.path;
-    if (existing_path) {
-        path_steps.shift();
-        if (path_steps.length == 0) {
-            return;
-        }
-        if (!append) {
-            const first_step = existing_path.path_steps[0];
-            existing_path.path_steps = path_steps;
-            existing_path.path_length = path_steps.length;
-            const same_first_step = !!path_steps[0] && !!path_steps[0][0] && first_step[0] == path_steps[0][0] && first_step[1] == path_steps[0][1];
-            if (!same_first_step) existing_path.progress = 0;
-        } else {
-            existing_path.path_steps = existing_path.path_steps.concat(path_steps);
-            existing_path.path_length = existing_path.path_steps.length;
-        }
-    } else {
-        const full_path = {
-            id: id_counter++,
-            entity_index: entity.entity_index,
-            path_steps: path_steps,
-            path_length: path_steps.length,
-            progress: ticks_per_second,
-        }
-        paths.push(full_path);
-        entity.path = full_path;
-        if (entity == player_entity) player_path = full_path;
+
+    path_steps.shift();
+    if (path_steps.length == 0) return;
+
+    if (append)
+    {
+        existing_path.path_steps = existing_path.path_steps.concat(path_steps);
+        return;
     }
+
+    const old_progress = existing_path.progress;
+    existing_path.progress = 0;
+
+    if (existing_path.path_steps.length > 0)
+    {
+        const first_step = existing_path.path_steps[0];
+        const same_first_step = first_step[0] == path_steps[0][0] && first_step[1] == path_steps[0][1];
+        if (same_first_step) existing_path.progress = old_progress;
+    }
+
+    existing_path.path_steps = path_steps;
 }
 
 function get_random_int(min, max) {
@@ -2577,20 +2938,25 @@ function calculate_path_positions(start, end) {
 
     visited.add(posToStr(start));
 
-    while (queue.length > 0) {
+    while (queue.length > 0)
+    {
         const path = queue.shift();
         const [x, y] = path[path.length - 1];
 
         if (x === end[0] && y === end[1]) return path;
 
-        for (const [dx, dy] of [[0, 1], [1, 0], [0, -1], [-1, 0]]) {
+        for (const [dx, dy] of [[0, 1], [1, 0], [0, -1], [-1, 0]])
+        {
             const [nx, ny] = [x + dx, y + dy];
-            if (nx >= 0 && nx < cols && ny >= 0 && ny < rows && (area_board[nx][ny] === 0 || area_board[nx][ny] === 2)) {
+            if (nx >= 0 && nx < cols && ny >= 0 && ny < rows && (area_board[nx][ny] === 0 || area_board[nx][ny] === 2))
+            {
                 const key = posToStr([nx, ny]);
                 const in_boundaries = nx >= x_boundaries[0] && nx <= x_boundaries[1] && ny >= y_boundaries[0] && ny <= y_boundaries[1];
-                if (!visited.has(key)) {
+                if (!visited.has(key))
+                {
                     visited.add(key);
-                    if (in_boundaries) {
+                    if (in_boundaries)
+                    {
                         queue.push([...path, [nx, ny]]);
                     }
                 }
@@ -2610,9 +2976,7 @@ function chase_entity(source_entity, target_entity, action) {
     // console.log('chase_entity', source_entity.id, target_entity.id);
 
     const path_steps = calculate_path_positions([source_entity.x, source_entity.y], [target_entity.x, target_entity.y]);
-    if (path_steps != null) {
-        change_path(source_entity, path_steps);
-    }
+    if (path_steps != null) change_path(source_entity, path_steps);
 }
 
 /** @type {(entity1: Entity, entity2: Entity)} */
