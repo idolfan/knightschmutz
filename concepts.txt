@@ -1,3 +1,4 @@
 - Visual_effect used for animations / particles
 - Scheduled_Callback to schedule future events ( like dealing dmg after a cast time)
 - Actions with requirements and effects, used for spells ( or maybe events)
+- Entites have phases, guiding their behavior
