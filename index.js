@@ -231,6 +231,11 @@ const mana_available_requirement = (context, action) => {
 //#endregion -----------------------------------------------------------------------
 //#region ------------------------- Actions ----------------------------------------
 
+
+/** @type {Array<Action_Slot>} */
+const action_slots = [];
+const action_slots_count = 9
+
 const log_requirements = false;
 
 /** 
@@ -524,7 +529,6 @@ const aoe_indicator_effect = (x, y, size, duration) => {
 //#endregion -----------------------------------------------------------------------
 //#region -------------------- Element Positions -----------------------------------
 
-
 /** @type {Slot_Info} */
 const action_slot_info = {
     image: slot_image,
@@ -588,6 +592,25 @@ const info_small_margins = [6 / 83, 6 / 34, 6 / 83, 6 / 34];
 let info_small_zone_boundaries;
 
 let loaded = false;
+
+/** @type {Slot} */
+const weapon_slot = {
+    x: canvas.width * 0.01,
+    y: canvas.height * 0.65,
+    width: canvas.height * 0.1,
+    height: canvas.height * 0.1,
+}
+
+{
+    const margins = default_slot_info.zone_margin;
+    weapon_slot.zone_boundaries = [
+        weapon_slot.x + weapon_slot.width * margins[0],
+        weapon_slot.y + weapon_slot.height * margins[1],
+        weapon_slot.x + weapon_slot.width * (1 - margins[2]),
+        weapon_slot.y + weapon_slot.height * (1 - margins[3]),
+    ]
+
+}
 
 setTimeout(load, 500);
 
@@ -1197,6 +1220,7 @@ for (let i = 1; i < world_area_size - 1; i++)
     }
 }
 
+// init Entities
 /** @type {Player} */
 const player = {
     id: id_counter++,
@@ -1206,28 +1230,6 @@ const player = {
 add_player(player);
 player_entity = entities[player.entity_index];
 
-/** @type {Array<Action_Slot>} */
-const action_slots = [];
-const action_slots_count = 9
-
-/** @type {Slot} */
-const weapon_slot = {
-    x: canvas.width * 0.01,
-    y: canvas.height * 0.65,
-    width: canvas.height * 0.1,
-    height: canvas.height * 0.1,
-}
-
-{
-    const margins = default_slot_info.zone_margin;
-    weapon_slot.zone_boundaries = [
-        weapon_slot.x + weapon_slot.width * margins[0],
-        weapon_slot.y + weapon_slot.height * margins[1],
-        weapon_slot.x + weapon_slot.width * (1 - margins[2]),
-        weapon_slot.y + weapon_slot.height * (1 - margins[3]),
-    ]
-
-}
 
 /** @type {Array<Entity>} */
 const start_entites = [
@@ -1289,7 +1291,7 @@ function calculate_entity_stats(entity) {
     }
 
     if (entity?.stats?.current_hp) entity.stats.current_hp = entity.stats.max_hp * hp_percent;
-    
+
     if (entity?.stats?.current_mana) entity.stats.current_mana = entity.stats.max_mana * mana_percent;
 }
 
@@ -1334,6 +1336,8 @@ function add_player(player) {
         display_name: player.display_name,
         x: 10,
         y: 10,
+        next_x: 10,
+        next_y: 10,
         path: {
             path_steps: [],
             progress: 0,
@@ -1537,6 +1541,18 @@ let zoom = cell_size / 40.0;
 const camera_origin = /* [20, 20] */[canvas.width / 2, canvas.height / 2];
 const camera_speed = 7;
 
+const clouds = [
+    {
+        x: 10, y: 15, radius: 15, offset_x: 0, offset_y: 0, color_1: "rgb(0,0,0,0.4)", color_2: "rgb(0,0,0,0.0)",
+    },
+    {
+        x: 40, y: 25, radius: 12, offset_x: 3, offset_y: 2, color_1: "rgb(0,0,0,0.4)", color_2: "rgb(0,0,0,0.0)",
+    },
+    {
+        x: 30, y: 55, radius: 12, offset_x: 3, offset_y: 2, color_1: "rgb(0,0,0,0.4)", color_2: "rgb(0,0,0,0.0)"
+    }
+]
+
 /** @type {Array<Visual_Effect>} */
 const visual_effects = [];
 
@@ -1546,6 +1562,8 @@ ctx.imageSmoothingEnabled = false;
 
 
 function draw(time) {
+
+
     if (!loaded) return;
 
     if (!keys_pressed.space && player_entity.visual_x)
@@ -1596,7 +1614,7 @@ function draw(time) {
 
     ctx.translate(translation[0], translation[1]);
 
-    // Calculate entity visual positions with path progress for this frame
+    // visual positions
     for (let i = 0; i < entities.length; i++)
     {
         const entity = entities[i];
@@ -1604,24 +1622,28 @@ function draw(time) {
 
         const new_visual_x = entity.x * cell_size + cell_margin;
         const new_visual_y = entity.y * cell_size + cell_margin;
-
+        //if (Math.abs(new_visual_x - entity.visual_x) > cell_size) console.log('x');
+        //if (Math.abs(new_visual_y - entity.visual_y) > cell_size) console.log('y');
         entity.visual_x = Math.abs(new_visual_x - entity.visual_x) > cell_size ? entity.visual_x + (new_visual_x - entity.visual_x) / 2 : new_visual_x;
         entity.visual_y = Math.abs(new_visual_y - entity.visual_y) > cell_size ? entity.visual_y + (new_visual_y - entity.visual_y) / 2 : new_visual_y;
 
         if (entity.path && entity.path.path_steps.length > 0)
         {
             const next_cell = entity.path.path_steps[0];
-            if (next_cell)
+            if (next_cell && !entity.path.blocked_by)
             {
-                const time_passed = (time - lastRenderTime);
 
-                const progress_x = cell_size * (next_cell[0] - entity.x) * entity.path.visual_progress;
-                const progress_y = cell_size * (next_cell[1] - entity.y) * entity.path.visual_progress;
+                const time_passed = (time - lastRenderTime);
+                entity.path.visual_progress += (time_passed / 1000) * entity.stats.movement_speed * (entity.path.visual_mult || 1);
+
+                const progress_x = Math.floor(cell_size * (next_cell[0] - entity.x) * entity.path.visual_progress);
+                const progress_y = Math.floor(cell_size * (next_cell[1] - entity.y) * entity.path.visual_progress);
+                //if (entity == player_entity) console.log(/* 'x',progress_x,"y", progress_y, */"tp", time_passed, "vp", entity.path.visual_progress, "p%", entity.path.progress / ticks_per_second, "vm", entity.path.visual_mult)
 
                 entity.visual_x += progress_x;
                 entity.visual_y += progress_y;
 
-                entity.path.visual_progress += (time_passed / 1000) * entity.stats.movement_speed;
+
             }
         }
     }
@@ -1845,9 +1867,26 @@ function draw(time) {
 
     ctx.closePath();
 
+    // Draw clouds
+    clouds.forEach(cloud => {
+        const gradient = ctx.createRadialGradient(
+            (cloud.x + cloud.offset_x) * cell_size, (cloud.y + cloud.offset_y) * cell_size, 0,
+            cloud.x * cell_size, cloud.y * cell_size, cloud.radius * cell_size);
+        gradient.addColorStop(0, cloud.color_1);
+        gradient.addColorStop(1, cloud.color_2);
+
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(cloud.x * cell_size, cloud.y * cell_size, cloud.radius * cell_size, 0, 2 * Math.PI);
+        ctx.fill();
+    });
+
     ctx.translate(-translation[0], -translation[1]);
 
-    // HUD
+    ctx.fillStyle = 'rgba(255, 208, 0, 0.06)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Draw HUD
     // HP
     {
         const position = hud_hp_position;
@@ -2237,6 +2276,13 @@ function draw(time) {
 
     }
 
+    // Draw test text
+    /* ctx.font = '20px "Press Start 2P"';
+    ctx.fillStyle = '#00FF00';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(player_entity?.path?.visual_mult, 40, 40); */
+
 
     if (dragged_slot_zone)
         draw_image_boundaries(dragged_slot_zone.equipment.image, dragged_slot_zone.zone_boundaries);
@@ -2415,8 +2461,7 @@ function handle_inputs() {
             if (path_steps != null) change_path(player_entity, path_steps, true);
         } else
         {
-            const path_steps = calculate_path_positions([player_entity.x, player_entity.y], clicked_cell);
-            //console.log('path', path);
+            const path_steps = calculate_path_positions([player_entity.next_x, player_entity.next_y], clicked_cell);
 
             if (path_steps != null) change_path(player_entity, path_steps);
         }
@@ -2535,7 +2580,7 @@ function handle_inputs() {
 
     }
 
-    // 1 -9
+    // 1 - 9
     for (let i = 1; i <= 9; i++)
     {
         if (keys_typed[i])
@@ -2809,12 +2854,20 @@ function tick() {
         {
             path.progress = 0;
             path.visual_progress = 0;
+            visual_mult = 0;
+            entity.next_x = entity.x;
+            entity.next_y = entity.y;
+            entity.path.blocked_by = blocked_by_entity;
+        } else {
+            entity.path.blocked_by = null;
         }
 
         const fully_progressed = path.progress >= ticks_per_second;
         if (fully_progressed) move: {
             path.progress -= ticks_per_second;
             path.visual_progress = path.visual_progress - 1;
+            const factor = 1 / (1 + path.visual_progress);
+            path.visual_mult = 1 + (factor - 1) / 2;
             path.path_steps.shift();
 
             entity_positions[entity.x][entity.y] = null;
@@ -3045,8 +3098,13 @@ function process_standard_kiting(entity) {
 function change_path(entity, path_steps, append = false) {
     const existing_path = entity.path;
 
-    path_steps.shift();
+    //path_steps.shift();
     if (path_steps.length == 0) return;
+
+    const first_step = path_steps[0];
+
+    if (path_steps.length > 1 && first_step[0] == entity.x && first_step[1] == entity.y)
+        path_steps.shift();
 
     if (append)
     {
@@ -3054,25 +3112,14 @@ function change_path(entity, path_steps, append = false) {
         return;
     }
 
-    const old_progress = existing_path.progress;
-    existing_path.progress = 0;
-
-    const old_visual_progress = existing_path.visual_progress;
-    existing_path.visual_progress = 0;
-
-    if (existing_path.path_steps.length > 0)
+    if (existing_path.path_steps.length == 0)
     {
-        const first_step = existing_path.path_steps[0];
-        const same_first_step = first_step[0] == path_steps[0][0] && first_step[1] == path_steps[0][1];
-        if (same_first_step)
-        {
-            existing_path.progress = old_progress;
-            existing_path.visual_progress = old_visual_progress;
-        }
+        existing_path.progress = 0;
+        existing_path.visual_progress = 0;
     }
 
-
     existing_path.path_steps = path_steps;
+
 }
 
 function get_random_int(min, max) {

@@ -100,6 +100,7 @@ const Entity_Type = {
  * @property {Array<Array>} path_steps - An array of positions representing the path.
  * @property {number} progress - progress to the next point in the path.
  * @property {number} visual_progress - Between 0 and 1
+ * @property {number} visual_mult
  * @property {Entity} blocked_by
  */
 
