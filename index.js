@@ -1,4 +1,4 @@
-//#region ------------------------------------------------------------------- Canvas ------------------------------------------
+//#region ------------------------ Canvas ------------------------------------------
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 function resizeCanvas() {
@@ -8,8 +8,8 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas, false);
 resizeCanvas();
 
-//#endregion ------------------------------------------------------------------------------------------------------------------
-//#region ------------------------------------------------------------------- Images ------------------------------------------
+//#endregion -----------------------------------------------------------------------
+//#region ------------------------ Images ------------------------------------------
 
 const player_image = new Image();
 player_image.src = './images/player.png';
@@ -59,8 +59,8 @@ spike_image.src = './images/spike.png';
 const info_small_image = new Image();
 info_small_image.src = './images/info_small.png';
 
-//#endregion ------------------------------------------------------------------------------------------------------------------
-//#region ------------------------------------------------------------------ Constants ----------------------------------------
+//#endregion -----------------------------------------------------------------------
+//#region ----------------------- Constants ----------------------------------------
 
 const Cell_Type = Object.freeze({
     EMPTY: 0,
@@ -122,8 +122,8 @@ const Phase = {
     DEAD: 'DEAD',
 }
 
-//#endregion ------------------------------------------------------------------------------------------------------------------
-//#region ------------------------------------------------------------------ Game state ---------------------------------------
+//#endregion -----------------------------------------------------------------------
+//#region ----------------------- Game state ---------------------------------------
 
 const ticks_per_second = 60;
 const world_area_size = 100;
@@ -179,8 +179,8 @@ let inventory_zones = [];
 let tick_interval_id;
 
 
-//#endregion ------------------------------------------------------------------------------------------------------------------
-//#region ------------------------------------------------------------------ Requirements -------------------------------------
+//#endregion -----------------------------------------------------------------------
+//#region ---------------------- Requirements --------------------------------------
 
 /** @type {Requirement} */
 const not_self_requirement = (context) => {
@@ -228,8 +228,8 @@ const mana_available_requirement = (context, action) => {
     return mana_available;
 }
 
-//#endregion ------------------------------------------------------------------------------------------------------------------
-//#region --------------------------------------------------------------------- Actions ---------------------------------------
+//#endregion -----------------------------------------------------------------------
+//#region ------------------------- Actions ----------------------------------------
 
 const log_requirements = false;
 
@@ -521,8 +521,8 @@ const aoe_indicator_effect = (x, y, size, duration) => {
     }
 }
 
-//#endregion ------------------------------------------------------------------------------------------------------------------
-//#region --------------------------------------------------------------- Element Positions -----------------------------------
+//#endregion -----------------------------------------------------------------------
+//#region -------------------- Element Positions -----------------------------------
 
 
 /** @type {Slot_Info} */
@@ -615,8 +615,8 @@ function load() {
 }
 
 
-//#endregion ---------------------------------------------------------------------------------------------------------------------
-//#region ------------------------------------------------------------------- Equipment ---------------------------------------
+//#endregion -----------------------------------------------------------------------
+//#region ------------------------ Equipment ---------------------------------------
 
 /** @type {Create_Equipment} */
 const test_amulet_equipment = (favour = 0) => {
@@ -710,8 +710,8 @@ const test_bow_equipment = (favour = 0) => {
 
 
 
-// #endregion -----------------------------------------------------------------------------------------------------------------
-//#region -------------------------------------------------------------- Iventory management-----------------------------------
+// #endregion ----------------------------------------------------------------------
+//#region ------------------- Iventory management-----------------------------------
 
 /** @type {(inventory: Inventory, image: HTMLImageElement, boundaries: Margins, margins: Margins, slot_info: Slot_Info) => Inventory_Zone} */
 function create_inventory_zone(inventory, image, boundaries, margins, slot_info) {
@@ -1019,8 +1019,8 @@ function close_inventory(inventory) {
 
 }
 
-//#endregion ------------------------------------------------------------------------------------------------------------------
-//#region --------------------------------------------------------------- Entity definitions ----------------------------------
+//#endregion -----------------------------------------------------------------------
+//#region -------------------- Entity definitions ----------------------------------
 
 /** @type {Create_Entity} */
 const red_melee_entity = (x, y) => {
@@ -1124,8 +1124,8 @@ const red_mage_entity = (x, y) => {
     }
 }
 
-//#endregion ------------------------------------------------------------------------------------------------------------------
-//#region ------------------------------------------------------------------- Init state --------------------------------------
+//#endregion -----------------------------------------------------------------------
+//#region ----------------------- Init state ---------------------------------------
 
 const chest_loot_table = [
     [test_amulet_equipment, 1],
@@ -1249,15 +1249,11 @@ for (let i = 0; i < start_entites.length; i++)
     add_entity(entity);
 }
 
-//#endregion ------------------------------------------------------------------------------------------------------------------
-//#region --------------------------------------------------------------- Entity Management -----------------------------------
+//#endregion -----------------------------------------------------------------------
+//#region -------------------- Entity Management -----------------------------------
 /** @type {(entity: Entity)} */
 function calculate_entity_stats(entity) {
-    if (!entity)
-    {
-        //console.log("No entity on calculate stats!");
-        return;
-    }
+    if (!entity) return;
 
     const hp_percent = entity?.stats?.current_hp / entity?.stats?.max_hp;
     const mana_percent = entity?.stats?.current_mana / entity?.stats?.max_mana;
@@ -1292,14 +1288,9 @@ function calculate_entity_stats(entity) {
         }
     }
 
-    if (entity?.stats?.current_hp)
-    {
-        entity.stats.current_hp = entity.stats.max_hp * hp_percent;
-    }
-    if (entity?.stats?.current_mana)
-    {
-        entity.stats.current_mana = entity.stats.max_mana * mana_percent;
-    }
+    if (entity?.stats?.current_hp) entity.stats.current_hp = entity.stats.max_hp * hp_percent;
+    
+    if (entity?.stats?.current_mana) entity.stats.current_mana = entity.stats.max_mana * mana_percent;
 }
 
 /** @type {(entity: Entity) => Entity} */
@@ -1537,8 +1528,8 @@ function entity_on_kill(combat_context) {
 }
 
 
-//#endregion -------------------------------------------------------------------------------------------------------------------
-//#region -------------------------------------------------------------------- Render -----------------------------------------
+//#endregion -----------------------------------------------------------------------
+//#region ------------------------- Render -----------------------------------------
 
 let cell_size = /* 320; */ 80;
 let cell_margin = /* 32; */ 8;
@@ -1559,15 +1550,11 @@ function draw(time) {
 
     if (!keys_pressed.space && player_entity.visual_x)
     {
-        /* camera_origin[0] = (player_entity?.x * cell_size + cell_size / 2) / zoom;
-        camera_origin[1] = (player_entity?.y * cell_size + cell_size / 2) / zoom; */
         const camera_distance_x = (player_entity.visual_x / zoom - camera_origin[0]);
         const camera_distance_y = (player_entity.visual_y / zoom - camera_origin[1]);
-        /* camera_origin[0] += Math.sign(camera_distance_x) * Math.min(0.1 * cell_size,Math.abs(camera_distance_x));
-        camera_origin[1] += Math.sign(camera_distance_y) * Math.min(0.1 * cell_size,Math.abs(camera_distance_y)); */
         const camera_speed_x = camera_distance_x / ticks_per_second * 3;
         const camera_speed_y = camera_distance_y / ticks_per_second * 3;
-        //console.log(camera_speed_x);
+
         camera_origin[0] += Math.abs(camera_speed_x) > 0.10 ? camera_speed_x : 0;
         camera_origin[1] += Math.abs(camera_speed_y) > 0.10 ? camera_speed_y : 0;
 
@@ -1628,12 +1615,8 @@ function draw(time) {
             {
                 const time_passed = (time - lastRenderTime);
 
-                //if(entity.entity_type == "PLAYER") console.log("vp", entity.path.visual_progress, time_passed);
-
-                const progress_x = cell_size * (next_cell[0] - entity.x) *
-                    (/* entity.path.progress + */ entity.path.visual_progress);
-                const progress_y = cell_size * (next_cell[1] - entity.y) *
-                    (/* entity.path.progress +  */ entity.path.visual_progress);
+                const progress_x = cell_size * (next_cell[0] - entity.x) * entity.path.visual_progress;
+                const progress_y = cell_size * (next_cell[1] - entity.y) * entity.path.visual_progress;
 
                 entity.visual_x += progress_x;
                 entity.visual_y += progress_y;
@@ -2322,8 +2305,8 @@ function rotate_image(image, direction) {
     return rotated_image_canvas;
 }
 
-//#endregion ---------------------------------------------------------------------------------------------------------------------
-//#region ----------------------------------------------------------------- Input handling ------------------------------------
+//#endregion -----------------------------------------------------------------------
+//#region --------------------- Input handling -------------------------------------
 
 const mouse_position = [0, 0];
 let time_since_entity_hovered = 0;
@@ -2511,12 +2494,10 @@ function handle_inputs() {
             const target_entity = hovered_entity;
             if (!target_entity) break right_mouse_button;
             const context = { target_entity, source_entity: player_entity }
-            //if (get_distance(context) >= 1.5) {
+
             player_entity.phase = Phase.CHASING;
             player_entity.phase_states.chasing.action = player_entity.basic_attack;
             player_entity.phase_states.chasing.target = target_entity;
-            //}
-            //take_action(context, player_entity.basic_attack);
         }
     }
 
@@ -2564,7 +2545,7 @@ function handle_inputs() {
             if (inventory_zones[0].visible || inventory_zones[1].visible)
             {
 
-                if (hovered_slot /* && hovered_slot.inventory != inventory_zones[2].inventory */)
+                if (hovered_slot)
                 {
                     const new_slot = inventory_zones[2].slots[i - 1];
                     if (new_slot) transfer_equipment(hovered_slot, new_slot, hovered_slot.equipment);
@@ -2585,8 +2566,8 @@ function handle_inputs() {
     }
 }
 
-//#endregion --------------------------------------------------------------------------------------------
-//#region ------------------------------------------------------------------- Listeners ---------------------------------------
+//#endregion -----------------------------------------------------------------------
+//#region ------------------------ Listeners ---------------------------------------
 window.addEventListener('keydown', (event) => {
     const key = event.code.replace("Digit", "").replace("Key", "");
     // console.log('key', key.toLowerCase());
@@ -2699,7 +2680,7 @@ window.addEventListener('mouseup', (event) => {
 
 
 window.addEventListener('contextmenu', (event) => {
-    event.preventDefault(); // verhindert das Kontextmenü
+    event.preventDefault();
 });
 
 window.addEventListener("wheel", (event) => {
@@ -2726,8 +2707,8 @@ window.addEventListener("dblclick", (event) => {
     console.log("doubleclick!");
 })
 
-//#endregion -----------------------------------------------------------------------------------------------------------------
-//#region -------------------------------------------------------------------- Updating --------------------------------------
+//#endregion -----------------------------------------------------------------------
+//#region ------------------------ Updating ----------------------------------------
 
 requestAnimationFrame(render);
 
@@ -2741,19 +2722,16 @@ function tick() {
         const inventory_zone = inventory_zones[i];
         if (!inventory_zone.visible) continue;
 
-        //console.log('i',i);
         for (let j = 0; j < inventory_zone.slots.length; j++)
         {
 
             const slot = inventory_zone.slots[j];
             const zone_b = slot.zone_boundaries;
-            //console.log('mp, zb', mouse_position, zone_b)
             const mouse_inside = mouse_position[0] > zone_b[0] && mouse_position[0] < zone_b[2]
                 && mouse_position[1] > zone_b[1] && mouse_position[1] < zone_b[3];
 
             if (mouse_inside)
             {
-                //console.log('Mouse inside zone', slot, mouse_position);
                 hovered_slot = slot;
                 found = true;
                 break find_hovered;
@@ -2864,7 +2842,6 @@ function tick() {
     for (let i = delete_length - 1; i >= 0; i--)
     {
         const entity = entities_marked_for_delete[i];
-        //console.log('entity for delete', entity);
         entities[entity.entity_index] = undefined;
         if (entity.enemy_entity_index != null) enemy_entities[entity.enemy_entity_index] = undefined;
         if (entity.player_entity_index != null) player_entities[entity.player_entity_index] = undefined;
@@ -2912,6 +2889,7 @@ function process_enemy_ai() {
 
             if (entity.enemy_type == Enemy_Type.RED_MELEE)
             {
+
                 process_standard_chasing(entity);
 
                 if (distance_to_closest_player > chase_lose_range)
@@ -2920,6 +2898,7 @@ function process_enemy_ai() {
             }
             else if (entity.enemy_type == Enemy_Type.RED_BOW)
             {
+
                 process_standard_chasing(entity);
 
                 if (distance_to_closest_player > chase_lose_range)
@@ -2957,6 +2936,7 @@ function process_enemy_ai() {
         }
         else wandering: if (phase == Phase.WANDERING)
         {
+
             process_standard_wandering(entity);
 
             if (distance_to_closest_player < chase_aggro_range)
@@ -2967,6 +2947,7 @@ function process_enemy_ai() {
         }
         else kiting: if (phase == Phase.KITING)
         {
+
             process_standard_kiting(entity);
 
             if (entity.enemy_type == Enemy_Type.RED_BOW)
@@ -3177,4 +3158,4 @@ function entity_distance(entity1, entity2) {
     const distance_y = entity2.y - entity1.y;
     return Math.sqrt(distance_x * distance_x + distance_y * distance_y);
 }
-//#endregion ----------------------------------------------------------------------------------------------------------------
+//#endregion -----------------------------------------------------------------------
