@@ -3,11 +3,14 @@ Fixes: -----------------------------------------
 Features: --------------------------------------
 - PROTECTING ( Defending ?) phase
 - World generation ( structures with chests & enemies )
-  -> Protecting phase for spawned enemies )
+  -> Protecting phase for spawned enemies
 - armor / dmg reduction system
 - auto mob spawning
 - increase map size
 - effects on equipment + hover info about it in inventory
 - hover on enemies info hud element
 - test mode ( for game init, maybe with hotkey during loading)
-- freeze game hotkey
+
+
+
+- WINDOWS + V

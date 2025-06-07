@@ -56,6 +56,8 @@ const arrow_image = new Image();
 arrow_image.src = './images/arrow.png';
 const spike_image = new Image();
 spike_image.src = './images/spike.png';
+const info_small_image = new Image();
+info_small_image.src = './images/info_small.png';
 
 //#endregion ------------------------------------------------------------------------------------------------------------------
 //#region ------------------------------------------------------------------ Constants ----------------------------------------
@@ -117,6 +119,7 @@ const Phase = {
     FLEEING: 'FLEEING',
     KITING: 'KITING',
     PATHING: 'PATHING',
+    DEAD: 'DEAD',
 }
 
 //#endregion ------------------------------------------------------------------------------------------------------------------
@@ -173,6 +176,8 @@ let hovered_cell;
 /** @type {Array<Inventory_Zone>} */
 let inventory_zones = [];
 
+let tick_interval_id;
+
 
 //#endregion ------------------------------------------------------------------------------------------------------------------
 //#region ------------------------------------------------------------------ Requirements -------------------------------------
@@ -218,7 +223,6 @@ const cooldown_up_requirement = (context, action) => {
 
 /** @type {Requirement} */
 const mana_available_requirement = (context, action) => {
-    console.log("Mana", context.source_entity.stats.current_mana, action.mana_cost);
     const mana_available = context.source_entity.stats.current_mana >= action.mana_cost;
     if (log_requirements) console.log('mana_available', mana_available);
     return mana_available;
@@ -288,6 +292,7 @@ const cost_mana = (context, action) => {
 /** @type {Create_Action} */
 const melee_attack = (favour) => {
     return {
+        name: "Melee attack",
         requirements: [in_range_requirement, not_self_requirement, attack_timer_up_requirement],
         effect_functions: [(context) => {
             const combat_context = {
@@ -326,13 +331,14 @@ const melee_attack = (favour) => {
 
             visual_effects.push(visual_effect);
         }],
-        range: 1.5
+        range: 1.5,
     }
 }
 
 /** @type {Create_Action} */
 const bow_attack = (favour) => {
     return {
+        name: "Bow attack",
         requirements: [in_range_requirement, not_self_requirement, attack_timer_up_requirement],
         effect_functions: [(context) => {
             const combat_context = {
@@ -389,6 +395,7 @@ const bow_attack = (favour) => {
 /** @type {Create_Action} */
 const heal_spell = (favour) => {
     return {
+        name: "Heal",
         requirements: [in_range_requirement, cooldown_up_requirement, mana_available_requirement],
         effect_functions: [cost_mana,
             (context, action) => {
@@ -410,6 +417,7 @@ const heal_spell = (favour) => {
 /** @type {Create_Action} */
 const hammer_spell = (favour) => {
     return {
+        name: "Destruct",
         requirements: [in_cell_range_requirement, cooldown_up_requirement, mana_available_requirement],
         effect_functions: [cost_mana,
             (context, action) => {
@@ -428,6 +436,7 @@ const hammer_spell = (favour) => {
 /** @type {Create_Action} */
 const construct_spell = (favour) => {
     return {
+        name: "Construct",
         requirements: [in_cell_range_requirement, cooldown_up_requirement, mana_available_requirement],
         effect_functions: [cost_mana,
             (context, action) => {
@@ -446,6 +455,7 @@ const construct_spell = (favour) => {
 /** @type {Create_Action} */
 const spike_spell = (favour) => {
     return {
+        name: "Spike spell",
         requirements: [in_cell_range_requirement, cooldown_up_requirement, mana_available_requirement],
         effect_functions: [
             cost_mana,
@@ -573,6 +583,10 @@ const info_boundaries = [(0.5 - inv_width_percent / 2) * canvas.width, 0, (0.5 +
 const info_margins = [1 / 11, 1 / 13, 1 / 11, 1 / 13];
 let info_zone_boundaries;
 
+const info_small_boundaries = [(1 - inv_width_percent) * canvas.width, 0, (1) * canvas.width, null];
+const info_small_margins = [6 / 83, 6 / 34, 6 / 83, 6 / 34];
+let info_small_zone_boundaries;
+
 let loaded = false;
 
 setTimeout(load, 500);
@@ -592,6 +606,7 @@ function load() {
 
     info_zone_boundaries = calculate_zone_boundaries(info_image, info_boundaries, info_margins);
     action_slots_zone_boundaries = calculate_zone_boundaries(actions_slots_image, action_slots_boundaries, action_slots_margins);
+    info_small_zone_boundaries = calculate_zone_boundaries(info_small_image, info_small_boundaries, info_small_margins);
 
     init_action_slots();
 
@@ -1141,6 +1156,7 @@ function roll_for_table(loot_table, table_sum) {
     }
 }
 
+// World generation
 area_board = Array.from({ length: world_area_size }, () => Array(world_area_size).fill(0));
 for (let i = 0; i < world_area_size; i++)
 {
@@ -1166,6 +1182,18 @@ for (let i = 0; i < world_area_size; i++)
             const inventory = { equipments: equipments, slot_count: 30, type: Inventory_Type.OTHER };
             chest_inventories.set(i + ' ' + j, inventory);
         }
+    }
+}
+
+for (let i = 1; i < world_area_size - 1; i++)
+{
+    for (let j = 1; j < world_area_size - 1; j++)
+    {
+        if (area_board[i][j] != Cell_Type.WALL) continue;
+        if (area_board[i][j - 1] == Cell_Type.WALL || area_board[i][j + 1] == Cell_Type.WALL) continue;
+        if (area_board[i - 1][j] == Cell_Type.WALL || area_board[i + 1][j] == Cell_Type.WALL) continue;
+
+        if (Math.random() < 1) area_board[i][j] = Cell_Type.EMPTY;
     }
 }
 
@@ -1349,7 +1377,8 @@ function add_player(player) {
             pathing: {
 
             }
-        }
+        },
+        phase: Phase.IDLE,
     }
 
     const player_starting_equipment = [
@@ -1394,7 +1423,19 @@ function add_player(player) {
 /** @type {(combat_context: Combat_Context)} */
 function damage_entity(combat_context) {
     const target_entity = combat_context.target_entity;
-    target_entity.stats.current_hp -= combat_context.damage.amount;
+
+    let resulting_amount = combat_context.damage.amount;
+
+    if (target_entity.stats.armor)
+    {
+        const armor_mult = 1 - (target_entity.stats.armor) / (target_entity.stats.armor + 10);
+        resulting_amount *= armor_mult;
+    }
+
+    target_entity.stats.current_hp -= resulting_amount;
+
+    combat_context.damage.resulting_amount = resulting_amount;
+
     entity_on_taken_hit(combat_context);
     entity_on_scored_hit(combat_context);
 
@@ -1403,7 +1444,7 @@ function damage_entity(combat_context) {
         entity: target_entity,
         image: damage_Image,
         peak_at: 0.2,
-        size: 1.5,
+        size: Math.max(1.5, resulting_amount / 10),
         time: 0,
     })
 
@@ -1449,11 +1490,6 @@ function entity_on_death(combat_context) {
     const dying_entity = combat_context.target_entity;
     const source_entity = combat_context.source_entity;
 
-    if (source_entity.chasing_entity == dying_entity)
-    {
-        source_entity.chasing_entity == undefined;
-        delete source_entity.chasing_action_and_context;
-    }
     entity_positions[dying_entity.x][dying_entity.y] = null;
 
     entities_marked_for_delete.push(dying_entity);
@@ -1463,6 +1499,8 @@ function entity_on_death(combat_context) {
             on_death_callback(combat_context);
         });
     }
+
+    dying_entity.phase = Phase.DEAD;
 }
 
 /** @type {(combat_context: Combat_Context)} */
@@ -1502,11 +1540,11 @@ function entity_on_kill(combat_context) {
 //#endregion -------------------------------------------------------------------------------------------------------------------
 //#region -------------------------------------------------------------------- Render -----------------------------------------
 
-let cell_size = /* 320; */ 40;
-let cell_margin = /* 32; */ 4;
+let cell_size = /* 320; */ 80;
+let cell_margin = /* 32; */ 8;
 let zoom = cell_size / 40.0;
 const camera_origin = /* [20, 20] */[canvas.width / 2, canvas.height / 2];
-const camera_speed = 10;
+const camera_speed = 7;
 
 /** @type {Array<Visual_Effect>} */
 const visual_effects = [];
@@ -1516,13 +1554,29 @@ ctx.imageSmoothingEnabled = false;
 
 
 
-function draw() {
+function draw(time) {
     if (!loaded) return;
+
+    if (!keys_pressed.space && player_entity.visual_x)
+    {
+        /* camera_origin[0] = (player_entity?.x * cell_size + cell_size / 2) / zoom;
+        camera_origin[1] = (player_entity?.y * cell_size + cell_size / 2) / zoom; */
+        const camera_distance_x = (player_entity.visual_x / zoom - camera_origin[0]);
+        const camera_distance_y = (player_entity.visual_y / zoom - camera_origin[1]);
+        /* camera_origin[0] += Math.sign(camera_distance_x) * Math.min(0.1 * cell_size,Math.abs(camera_distance_x));
+        camera_origin[1] += Math.sign(camera_distance_y) * Math.min(0.1 * cell_size,Math.abs(camera_distance_y)); */
+        const camera_speed_x = camera_distance_x / ticks_per_second * 3;
+        const camera_speed_y = camera_distance_y / ticks_per_second * 3;
+        //console.log(camera_speed_x);
+        camera_origin[0] += Math.abs(camera_speed_x) > 0.10 ? camera_speed_x : 0;
+        camera_origin[1] += Math.abs(camera_speed_y) > 0.10 ? camera_speed_y : 0;
+
+    }
 
     updateCamera();
     time_since_entity_hovered += 1;
 
-    const translation = [-camera_origin[0] * zoom + (canvas.width / 2), -camera_origin[1] * zoom + canvas.height / 2];
+    const translation = [Math.floor(-camera_origin[0] * zoom + (canvas.width / 2)), Math.floor(-camera_origin[1] * zoom + canvas.height / 2)];
     hovered_cell = [
         Math.floor((mouse_position[0] - translation[0]) / cell_size),
         Math.floor((mouse_position[1] - translation[1]) / cell_size)
@@ -1561,16 +1615,30 @@ function draw() {
         const entity = entities[i];
         if (!entity) continue;
 
-        entity.visual_x = entity.x * cell_size + cell_margin;
-        entity.visual_y = entity.y * cell_size + cell_margin;
+        const new_visual_x = entity.x * cell_size + cell_margin;
+        const new_visual_y = entity.y * cell_size + cell_margin;
+
+        entity.visual_x = Math.abs(new_visual_x - entity.visual_x) > cell_size ? entity.visual_x + (new_visual_x - entity.visual_x) / 2 : new_visual_x;
+        entity.visual_y = Math.abs(new_visual_y - entity.visual_y) > cell_size ? entity.visual_y + (new_visual_y - entity.visual_y) / 2 : new_visual_y;
 
         if (entity.path && entity.path.path_steps.length > 0)
         {
             const next_cell = entity.path.path_steps[0];
             if (next_cell)
             {
-                entity.visual_x += cell_size * (next_cell[0] - entity.x) * entity.path.progress / ticks_per_second;
-                entity.visual_y += cell_size * (next_cell[1] - entity.y) * entity.path.progress / ticks_per_second;
+                const time_passed = (time - lastRenderTime);
+
+                //if(entity.entity_type == "PLAYER") console.log("vp", entity.path.visual_progress, time_passed);
+
+                const progress_x = cell_size * (next_cell[0] - entity.x) *
+                    (/* entity.path.progress + */ entity.path.visual_progress);
+                const progress_y = cell_size * (next_cell[1] - entity.y) *
+                    (/* entity.path.progress +  */ entity.path.visual_progress);
+
+                entity.visual_x += progress_x;
+                entity.visual_y += progress_y;
+
+                entity.path.visual_progress += (time_passed / 1000) * entity.stats.movement_speed;
             }
         }
     }
@@ -1590,7 +1658,7 @@ function draw() {
                 ctx.fillStyle = 'black';
                 ctx.fillRect(i * cell_size, j * cell_size + cell_size / 2, cell_size, 0.5 * cell_size);
                 ctx.fillStyle = 'rgb(64, 64, 64, 1)'
-                ctx.fillRect(i * cell_size, (j - 0.5) * cell_size, cell_size, cell_size * 1);
+                ctx.fillRect(i * cell_size, (j - 0.5) * cell_size, cell_size, cell_size);
             } else if (area_board[i][j] === 2)
             {
                 ctx.drawImage(chest_image, i * cell_size, j * cell_size, cell_size, cell_size);
@@ -1645,7 +1713,6 @@ function draw() {
         const entity = entities[player.entity_index];
         const x = entity.visual_x;
         const y = entity.visual_y;
-
         ctx.drawImage(player_image, x, y, 32 * zoom, 32 * zoom);
 
         draw_equipped_items(entity, x, y, zoom);
@@ -1891,6 +1958,71 @@ function draw() {
         }
     }
 
+    // Entity hover info
+    if (hovered_entity)
+    {
+
+        draw_image_boundaries(info_small_image, info_small_boundaries);
+
+        ctx.fillStyle = '#00FF00';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+
+
+        const stats_keys = Object.keys(hovered_entity.stats);
+        const strings = {};
+
+
+        ctx.font = '20px "Press Start 2P"';
+
+        const zone_b = info_small_zone_boundaries;
+        let line_height = zone_b[1];
+
+        ctx.fillText("" + hovered_entity.display_name + " stats", zone_b[0], line_height, zone_b[2] - zone_b[0]);
+        line_height += 20;
+        ctx.fillText("----------------------------------", zone_b[0], line_height, zone_b[2] - zone_b[0]);
+        line_height += 20;
+
+        ctx.font = '15px "Press Start 2P"';
+
+        stats_keys.forEach((key) => {
+            const value = hovered_entity.stats[key];
+            if (!strings[key] && Stat_Display_Names[key] != null)
+            {
+                strings[key] = "" + (Stat_Display_Names[key]) + ": "
+                strings[key] += value.toFixed(1);
+            }
+        })
+
+        const str_keys = Object.keys(strings);
+        for (let i = 0; i < str_keys.length; i++)
+        {
+            const str = strings[str_keys[i]];
+            if (str)
+                ctx.fillText(str, zone_b[0], line_height, zone_b[2] - zone_b[0]);
+            line_height += 17;
+        }
+
+        ctx.fillText("-------------------------", zone_b[0], line_height, zone_b[2] - zone_b[0]);
+        line_height += 17;
+
+
+        if (hovered_entity.basic_attack)
+        {
+            ctx.fillText(hovered_entity.basic_attack.name, zone_b[0], line_height, zone_b[2] - zone_b[0]);
+            line_height += 17;
+        }
+
+        for (let i = 0; i < hovered_entity.actions?.length || 0; i++)
+        {
+            const action = hovered_entity.actions[i];
+            if (!action) continue;
+
+            ctx.fillText(action.name, zone_b[0], line_height, zone_b[2] - zone_b[0]);
+            line_height += 17;
+        }
+    }
+
     // Inventory
     for (let i = 0; i < inventory_zones.length; i++)
     {
@@ -2128,8 +2260,13 @@ function draw() {
 
 }
 
-function render() {
-    draw();
+
+let lastRenderTime = performance.now();
+function render(time) {
+    draw(time);
+    const t1 = time;
+    const t2 = lastRenderTime;
+    lastRenderTime = time;
     requestAnimationFrame(render);
 }
 
@@ -2215,6 +2352,7 @@ const keys_typed = {
     left_mouse_button: false,
     right_mouse_button: false,
     e: false,
+    y: false,
     "1": false,
     "2": false,
     "4": false,
@@ -2245,11 +2383,9 @@ function updateCamera() {
 }
 
 function handle_inputs() {
-    if (keys_pressed.space)
-    {
-        camera_origin[0] = (player_entity?.x * cell_size + cell_size / 2) / zoom;
-        camera_origin[1] = (player_entity?.y * cell_size + cell_size / 2) / zoom;
-    }
+
+
+
     left_mouse_button: if (keys_typed.left_mouse_button)
     {
         keys_typed.left_mouse_button = false;
@@ -2271,6 +2407,19 @@ function handle_inputs() {
             Math.floor((mouse_position[0] - translation[0]) / cell_size),
             Math.floor((mouse_position[1] - translation[1]) / cell_size)
         ]
+
+        if (area_board[clicked_cell[0]][clicked_cell[1]] == Cell_Type.WALL)
+        {
+            const raw_position_x = (mouse_position[0] - translation[0]) / cell_size;
+            const raw_position_y = (mouse_position[1] - translation[1]) / cell_size;
+            const nearby_position_x = raw_position_x - clicked_cell[0] < 0.5 ? clicked_cell[0] - 1 : clicked_cell[0] + 1;
+            const nearby_position_y = raw_position_y - clicked_cell[1] < 0.5 ? clicked_cell[1] - 1 : clicked_cell[1] + 1;
+            if (area_board[nearby_position_x][nearby_position_y] != Cell_Type.WALL)
+            {
+                clicked_cell[0] = nearby_position_x;
+                clicked_cell[1] = nearby_position_y;
+            }
+        }
 
         player_entity.phase = Phase.PATHING;
 
@@ -2371,8 +2520,7 @@ function handle_inputs() {
         }
     }
 
-    if (keys_typed.e)
-    {
+    if (keys_typed.e) e: {
         keys_typed.e = false;
 
         const cell = area_board[player_entity.x][player_entity.y];
@@ -2440,7 +2588,7 @@ function handle_inputs() {
 //#endregion --------------------------------------------------------------------------------------------
 //#region ------------------------------------------------------------------- Listeners ---------------------------------------
 window.addEventListener('keydown', (event) => {
-    const key = event.key;
+    const key = event.code.replace("Digit", "").replace("Key", "");
     // console.log('key', key.toLowerCase());
     switch (key.toLowerCase())
     {
@@ -2468,11 +2616,23 @@ window.addEventListener('keydown', (event) => {
         default:
             keys_pressed[key.toLowerCase()] = true;
             keys_typed[key.toLowerCase()] = true;
+            if (keys_typed.y)
+            {
+                keys_typed.y = false;
+
+                if (tick_interval_id)
+                {
+                    clearInterval(tick_interval_id);
+
+                    tick_interval_id = null;
+                } else restart_tick();
+
+            }
     }
 });
 
 window.addEventListener('keyup', (event) => {
-    const key = event.key;
+    const key = event.code.replace("Digit", "").replace("Key", "");
     keys_pressed[key.toLowerCase()] = false;
     switch (key.toLowerCase())
     {
@@ -2569,7 +2729,7 @@ window.addEventListener("dblclick", (event) => {
 //#endregion -----------------------------------------------------------------------------------------------------------------
 //#region -------------------------------------------------------------------- Updating --------------------------------------
 
-render();
+requestAnimationFrame(render);
 
 function tick() {
     if (!loaded) return;
@@ -2652,15 +2812,14 @@ function tick() {
     {
         const path = paths[i];
         const entity = path.entity;
-        if (!entity)
+        if (!entity || entity.phase == Phase.DEAD)
         {
             paths.splice(i, 1);
-            delete path;
+            delete path[i];
             continue;
         }
 
         if (path.path_steps.length === 0) continue;
-
 
         const pos = path.path_steps[0];
         entity.next_x = pos[0];
@@ -2668,11 +2827,16 @@ function tick() {
         path.progress += entity.stats.movement_speed;
 
         const blocked_by_entity = entity_positions[pos[0]][pos[1]];
-        if (blocked_by_entity && blocked_by_entity != entity) path.progress = 0;
+        if (blocked_by_entity && blocked_by_entity != entity)
+        {
+            path.progress = 0;
+            path.visual_progress = 0;
+        }
 
         const fully_progressed = path.progress >= ticks_per_second;
         if (fully_progressed) move: {
             path.progress -= ticks_per_second;
+            path.visual_progress = path.visual_progress - 1;
             path.path_steps.shift();
 
             entity_positions[entity.x][entity.y] = null;
@@ -2714,14 +2878,21 @@ function tick() {
 
 function process_player() {
     if (player_entity.phase == Phase.CHASING)
+    {
+        if (!player_entity.phase_states.chasing.target)
+        {
+            player_entity.phase = Phase.IDLE;
+            return;
+        }
         process_standard_chasing(player_entity);
+    }
 }
 
 function process_enemy_ai() {
     for (let i = 0; i < enemy_entities.length; i++)
     {
         const entity = enemy_entities[i];
-        if (!entity) continue;
+        if (!entity || entity.phase == Phase.DEAD) continue;
 
         const distance_to_players = player_entities.map(player_entity => {
             return Math.sqrt(Math.pow(entity.x - player_entity.x, 2) + Math.pow(entity.y - player_entity.y, 2));
@@ -2833,6 +3004,12 @@ function process_standard_chasing(entity) {
     const { target, action } = entity.phase_states.chasing;
     if (!target) throw new Error;
     if (!action) throw new Error;
+
+    if (target.phase == Phase.DEAD)
+    {
+        entity.phase_states.chasing.target = null;
+        return;
+    }
     // console.log('chase_entity', entity.id, target_entity.id);
 
     /** @type {Context} */
@@ -2899,12 +3076,20 @@ function change_path(entity, path_steps, append = false) {
     const old_progress = existing_path.progress;
     existing_path.progress = 0;
 
+    const old_visual_progress = existing_path.visual_progress;
+    existing_path.visual_progress = 0;
+
     if (existing_path.path_steps.length > 0)
     {
         const first_step = existing_path.path_steps[0];
         const same_first_step = first_step[0] == path_steps[0][0] && first_step[1] == path_steps[0][1];
-        if (same_first_step) existing_path.progress = old_progress;
+        if (same_first_step)
+        {
+            existing_path.progress = old_progress;
+            existing_path.visual_progress = old_visual_progress;
+        }
     }
+
 
     existing_path.path_steps = path_steps;
 }
@@ -2917,10 +3102,17 @@ function get_random_float(min, max) {
     return Math.random() * (max - min) + min;
 }
 
-setInterval(() => {
+tick_interval_id = setInterval(() => {
     tick();
 }
     , 1000 / ticks_per_second);
+
+function restart_tick() {
+    if (tick_interval_id) clearInterval(tick_interval_id);
+    tick_interval_id = setInterval(() => {
+        tick();
+    }, 1000 / ticks_per_second);
+}
 
 /** @type {(start: Array<number>, end: Array<number>)} */
 function calculate_path_positions(start, end) {
@@ -2969,7 +3161,7 @@ function calculate_path_positions(start, end) {
 
 /** @type {(source_entity: Entity, target_entity: Entity, action: Action)} */
 function chase_entity(source_entity, target_entity, action) {
-    if (!target_entity) return;
+    if (!target_entity || target_entity.phase == Phase.DEAD) return;
 
     source_entity.chasing_entity = target_entity;
     source_entity.chasing_action_and_context = { action, context: { source_entity, target_entity } };

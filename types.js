@@ -98,7 +98,9 @@ const Entity_Type = {
  * @property {number} id
  * @property {Entity} entity
  * @property {Array<Array>} path_steps - An array of positions representing the path.
- * @property {number} progress - progress to the next point in the path. Between 0 and 1
+ * @property {number} progress - progress to the next point in the path.
+ * @property {number} progress_time
+ * @property {number} visual_progress
  * @property {Entity} blocked_by
  */
 
@@ -114,6 +116,7 @@ const Entity_Type = {
 
 /**
  * @typedef {Object} Action
+ * @property {string} name
  * @property {Array<Requirement>} requirements
  * @property {Array<Effect_Function>} effect_functions
  * @property {number} range
@@ -159,6 +162,7 @@ const Entity_Type = {
 /**
  * @typedef {Object} Damage
  * @property {number} amount
+ * @property {number} resulting_amount
  */
 
 /**
