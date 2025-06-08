@@ -1543,13 +1543,13 @@ const camera_speed = 7;
 
 const clouds = [
     {
-        x: 10, y: 15, radius: 15, offset_x: 0, offset_y: 0, color_1: "rgb(0,0,0,0.4)", color_2: "rgb(0,0,0,0.0)",
+        x: 26, y: 15, radius_1: 4, radius_2: 12, offset_x: 0, offset_y: 0, color_1: "rgb(0,0,0,0.4)", color_2: "rgb(0,0,0,0.0)", speed: [0.2, 0.1],
     },
     {
-        x: 40, y: 25, radius: 12, offset_x: 3, offset_y: 2, color_1: "rgb(0,0,0,0.4)", color_2: "rgb(0,0,0,0.0)",
+        x: 40, y: 25, radius_1: 0, radius_2: 12, offset_x: 3, offset_y: 2, color_1: "rgb(0,0,0,0.4)", color_2: "rgb(0,0,0,0.0)", speed: [-0.1, 0.2],
     },
     {
-        x: 30, y: 55, radius: 12, offset_x: 3, offset_y: 2, color_1: "rgb(0,0,0,0.4)", color_2: "rgb(0,0,0,0.0)"
+        x: 30, y: 55, radius_1: 0, radius_2: 13, offset_x: 3, offset_y: 2, color_1: "rgb(0,0,0,0.4)", color_2: "rgb(0,0,0,0.0)", speed: [-0.3, -0.1],
     }
 ]
 
@@ -1559,14 +1559,12 @@ const visual_effects = [];
 
 ctx.imageSmoothingEnabled = false;
 
-
-
 function draw(time) {
 
 
     if (!loaded) return;
 
-    if (!keys_pressed.space && player_entity.visual_x)
+    if (!keys_pressed.space && player_entity?.visual_x)
     {
         const camera_distance_x = (player_entity.visual_x / zoom - camera_origin[0]);
         const camera_distance_y = (player_entity.visual_y / zoom - camera_origin[1]);
@@ -1596,8 +1594,10 @@ function draw(time) {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Grid
+    const grid_width = 2;
+
     ctx.beginPath();
-    ctx.lineWidth = 3;
+    ctx.lineWidth = grid_width;
     for (let i = - (camera_origin[0] * zoom - canvas.width / 2) % cell_size; i < canvas.width; i += cell_size)
     {
         ctx.moveTo(i, 0);
@@ -1613,6 +1613,12 @@ function draw(time) {
 
 
     ctx.translate(translation[0], translation[1]);
+
+    /* draw_clouds();
+
+    ctx.translate(-translation[0], -translation[1]);
+
+    return; */
 
     // visual positions
     for (let i = 0; i < entities.length; i++)
@@ -1658,15 +1664,19 @@ function draw(time) {
     {
         for (let j = up_most_cell; j < down_most_cell; j++)
         {
-            if (area_board[i][j] === 1)
+            if (area_board[i][j] === Cell_Type.WALL)
             {
                 ctx.fillStyle = 'black';
                 ctx.fillRect(i * cell_size, j * cell_size + cell_size / 2, cell_size, 0.5 * cell_size);
                 ctx.fillStyle = 'rgb(64, 64, 64, 1)'
                 ctx.fillRect(i * cell_size, (j - 0.5) * cell_size, cell_size, cell_size);
-            } else if (area_board[i][j] === 2)
+            } else if (area_board[i][j] === Cell_Type.CHEST)
             {
                 ctx.drawImage(chest_image, i * cell_size, j * cell_size, cell_size, cell_size);
+            } else if (area_board[i][j] === Cell_Type.EMPTY)
+            {
+                ctx.fillStyle = 'rgb(0, 128, 40, 0.2)'
+                ctx.fillRect(i * cell_size + grid_width /2, j * cell_size + grid_width / 2, cell_size - grid_width, cell_size - grid_width);
             }
         }
     }
@@ -1716,6 +1726,7 @@ function draw(time) {
     {
         const player = players[i];
         const entity = entities[player.entity_index];
+        if (!entity) continue;
         const x = entity.visual_x;
         const y = entity.visual_y;
         ctx.drawImage(player_image, x, y, 32 * zoom, 32 * zoom);
@@ -1867,23 +1878,11 @@ function draw(time) {
 
     ctx.closePath();
 
-    // Draw clouds
-    clouds.forEach(cloud => {
-        const gradient = ctx.createRadialGradient(
-            (cloud.x + cloud.offset_x) * cell_size, (cloud.y + cloud.offset_y) * cell_size, 0,
-            cloud.x * cell_size, cloud.y * cell_size, cloud.radius * cell_size);
-        gradient.addColorStop(0, cloud.color_1);
-        gradient.addColorStop(1, cloud.color_2);
-
-        ctx.fillStyle = gradient;
-        ctx.beginPath();
-        ctx.arc(cloud.x * cell_size, cloud.y * cell_size, cloud.radius * cell_size, 0, 2 * Math.PI);
-        ctx.fill();
-    });
+    draw_clouds(time);
 
     ctx.translate(-translation[0], -translation[1]);
 
-    ctx.fillStyle = 'rgba(255, 208, 0, 0.06)';
+    ctx.fillStyle = 'rgba(255, 235, 150, 0.04)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Draw HUD
@@ -2333,22 +2332,35 @@ function draw_equipped_items(entity, x, y, zoom) {
 
 }
 
-/** @type {(image: HTMLImageElement, direction: [x: number, y: number]) => HTMLImageElement} */
-function rotate_image(image, direction) {
-    const temp_canvas = document.createElement('canvas');
-    temp_canvas.width = image.width;
-    temp_canvas.height = image.height;
-    const temp_ctx = temp_canvas.getContext('2d');
+function draw_clouds(time) {
+    const cloud_speed_mult = 2;
 
-    const angle = Math.atan2(-direction[1], direction[0]);
-    console.log('angle', angle, -135 / 360 * Math.PI);
+    // Draw clouds
+    clouds.forEach(cloud => {
+        const gradient = ctx.createRadialGradient(
+            (cloud.x + cloud.offset_x) * cell_size, (cloud.y + cloud.offset_y) * cell_size, cloud.radius_1 * cell_size,
+            cloud.x * cell_size, cloud.y * cell_size, cloud.radius_2 * cell_size);
+        gradient.addColorStop(0, cloud.color_1);
+        gradient.addColorStop(1, cloud.color_2);
 
-    temp_ctx.translate(temp_canvas.width / 2, temp_canvas.height / 2);
-    temp_ctx.rotate((-135 / 360 * Math.PI + angle) /* * Math.PI / 180 */);
-    temp_ctx.drawImage(image, -image.width / 2, -image.height / 2);
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(cloud.x * cell_size, cloud.y * cell_size, cloud.radius_2 * cell_size, 0, 2 * Math.PI);
+        ctx.fill();
 
-    const rotated_image_canvas = temp_canvas;
-    return rotated_image_canvas;
+        cloud.x += cloud_speed_mult * cloud.speed[0] * (time - lastRenderTime) / 1000
+
+        if (cloud.x > world_area_size + cloud.radius_2)
+            cloud.x -= world_area_size + 2 * cloud.radius_2;
+        if (cloud.x < - cloud.radius_2)
+            cloud.x += world_area_size + 2 * cloud.radius_2;
+
+        cloud.y += cloud_speed_mult * cloud.speed[1] * (time - lastRenderTime) / 1000
+        if (cloud.y > world_area_size + cloud.radius_2)
+            cloud.y -= world_area_size + 2 * cloud.radius_2;
+        if (cloud.y < - cloud.radius_2)
+            cloud.y += world_area_size + 2 * cloud.radius_2;
+    });
 }
 
 //#endregion -----------------------------------------------------------------------
@@ -2858,7 +2870,8 @@ function tick() {
             entity.next_x = entity.x;
             entity.next_y = entity.y;
             entity.path.blocked_by = blocked_by_entity;
-        } else {
+        } else
+        {
             entity.path.blocked_by = null;
         }
 
@@ -2907,7 +2920,7 @@ function tick() {
 }
 
 function process_player() {
-    if (player_entity.phase == Phase.CHASING)
+    if (player_entity?.phase == Phase.CHASING)
     {
         if (!player_entity.phase_states.chasing.target)
         {
