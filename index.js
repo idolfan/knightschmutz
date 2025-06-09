@@ -1148,22 +1148,183 @@ const red_mage_entity = (x, y) => {
 }
 
 //#endregion -----------------------------------------------------------------------
+//#region ----------------------- Structures ---------------------------------------
+
+const u = -1;
+
+/**
+ * @enum {Structure}
+ */
+const structures = {
+    u_structure: {
+        create: function (x, y, angle) {
+            const favour = (Math.floor((Math.random() - 0.2) * 12));
+
+            const table = loot_tables.standard_chest;
+            const chests_equipments = [
+                add_equipments_from_table(null, table, loot_table_sums.get(table), 2, favour),
+            ]
+
+            const cells = this.standard_cells.map(row => [...row]);
+
+            replace_with_equipments(cells, chests_equipments);
+
+            place_cells(rotated_array2(cells, angle), x, y);
+
+        },
+        standard_cells: [
+            [1, 1, 1, 1, 1],
+            [1, 2, 0, 0, 1],
+            [1, 0, 0, 0, 1],
+            [1, 0, 0, 0, 1],
+            [1, 1, 0, 1, 1],
+            [u, u, u, u, u],
+        ],
+        width: 6,
+        height: 5,
+    }
+}
+
+/** @type {(array2: Array<Array>, angle: number) => Array<Array>} */
+function rotated_array2(array2, angle) {
+    if (angle == 0) return array2;
+    const rotated = [];
+
+    const r_rows = (angle == 90 || angle == 270) ? array2[0].length : array2.length;
+    const r_cols = (angle == 90 || angle == 270) ? array2.length : array2[0].length;
+
+    for (let i = 0; i < r_rows; i++)
+    {
+        rotated.push([]);
+    }
+
+    if (angle == 90)
+    {
+
+        for (let i = 0; i < array2.length; i++)
+        {
+            const row = array2[i];
+            for (let j = row.length - 1; j >= 0; j--)
+            {
+                rotated[r_rows - 1 - j].push(array2[i][j]);
+            }
+        }
+
+    } else if (angle == 180)
+    {
+
+        for (let i = 0; i < array2.length; i++)
+        {
+            const row = array2[i];
+            for (let j = row.length - 1; j >= 0; j--)
+            {
+                rotated[r_rows - 1 - i].push(array2[i][j]);
+            }
+        }
+    } else if (angle == 270)
+    {
+        for (let i = array2.length - 1; i >= 0; i--)
+        {
+            const row = array2[i];
+            for (let j = 0; j < row.length; j++)
+            {
+                rotated[j].push(array2[i][j]);
+            }
+        }
+    }
+
+    return rotated;
+}
+
+/** @type {(cells: Cells)} */
+function replace_with_equipments(cells, chests_equipments) {
+    let ce_index = 0;
+    for (let i = 0; i < cells.length; i++)
+    {
+        const row = cells[i];
+        for (let j = 0; j < row.length; j++)
+        {
+            if (row[j] === Cell_Type.CHEST)
+            {
+                /** @type {Inventory} */
+                const inventory = { equipments: chests_equipments[ce_index], slot_count: 30, type: Inventory_Type.OTHER };
+                row[j] = inventory;
+                ce_index++;
+            }
+        }
+    }
+    if (ce_index > chests_equipments.length)
+        throw new Error("Bad replace_width_equipments usage. Cells had more chests than chests_equipments", cells, chests_equipments);
+}
+
+/** @type {(cells: Cells)} */
+function place_cells(cells, x, y) {
+    for (let i = 0; i < cells.length; i++)
+    {
+        const row = cells[i];
+        for (let j = 0; j < row.length; j++)
+        {
+            const value = cells[i][j];
+            if (value.slot_count)
+            {
+                area_board[i + x][j + y] = Cell_Type.CHEST;
+                chest_inventories.set(i + " " + j, value);
+            } else if (value == -1)
+            {
+
+            } else
+                area_board[i + x][j + y] = value;
+        }
+    }
+}
+
+//#endregion -----------------------------------------------------------------------
 //#region ----------------------- Init state ---------------------------------------
 
-const chest_loot_table = [
-    [test_amulet_equipment, 1],
-    [test_bow_equipment, 1],
-    [test_chestplate_equipment, 1],
-    [test_helmet_equipment, 1],
-    [test_sword_equipment, 1],
-]
+/**
+ * @enum {Loot_Table}
+ */
+const loot_tables = {
+    standard_chest: [
+        [test_amulet_equipment, 1],
+        [test_bow_equipment, 1],
+        [test_chestplate_equipment, 1],
+        [test_helmet_equipment, 1],
+        [test_sword_equipment, 1],
+    ],
+};
 
-let table_sum = 0;
-chest_loot_table.forEach((entry) => {
-    table_sum += entry[1];
-})
+/** @type {Map<Loot_Table, number>} */
+const loot_table_sums = new Map();
 
+{ // init table_sums
+    const table_keys = Object.keys(loot_tables);
 
+    for (let i = 0; i < table_keys.length; i++)
+    {
+        const key = table_keys[i];
+        const table = loot_tables[key];
+        loot_table_sums.set(table, table_sum(table));
+    }
+}
+
+/** @type {(table: loot_table, name: string)} */
+function add_loot_table(table, name) {
+    loot_tables[name] = table;
+    loot_table_sums.set(table, table_sum(table));
+}
+
+/** @type {(table: Loot_Table) => number} */
+function table_sum(table) {
+    let sum = 0;
+    table.forEach((entry) => {
+        sum += entry[1];
+    })
+
+    return sum;
+}
+
+/** @type {(loot_table: Loot_Table, table_sum: number) => Equipment} */
 function roll_for_table(loot_table, table_sum) {
     let increment = 0;
     let result;
@@ -1177,6 +1338,18 @@ function roll_for_table(loot_table, table_sum) {
             return entry[0];
         };
     }
+}
+
+/** @type {(equipments: Array<Equipment>, table: Loot_Table, sum: number, count: number, favour: number) => Array<Equipment>} */
+function add_equipments_from_table(equipments, table, sum, count, favour) {
+    if (equipments == null) equipments = [];
+    for (let i = 0; i < count; i++)
+    {
+        const equipment = roll_for_table(table, sum);
+        if (equipment) equipments.push(equipment(favour));
+    }
+
+    return equipments;
 }
 
 // World generation
@@ -1196,11 +1369,10 @@ for (let i = 0; i < world_area_size; i++)
 
             const favour = (Math.floor((Math.random() - 0.2) * 12));
 
-            for (let i = 0; i < 20; i++)
-            {
-                const equipment = roll_for_table(chest_loot_table, table_sum * 18);
-                if (equipment) equipments.push(equipment(favour));
-            }
+            const table = loot_tables.standard_chest;
+
+            add_equipments_from_table(equipments, table, loot_table_sums.get(table) * 18, 20, favour);
+
             /** @type {Inventory} */
             const inventory = { equipments: equipments, slot_count: 30, type: Inventory_Type.OTHER };
             chest_inventories.set(i + ' ' + j, inventory);
@@ -1219,6 +1391,66 @@ for (let i = 1; i < world_area_size - 1; i++)
         if (Math.random() < 1) area_board[i][j] = Cell_Type.EMPTY;
     }
 }
+
+// Structures
+
+const structure_cells = Array.from({ length: world_area_size }, () => Array(world_area_size).fill(0));
+
+const structure_density = 14 / (100 * 100)
+
+const structure_atempts = Math.ceil(structure_density * world_area_size * world_area_size);
+
+/** @type {Array<Structure>} */
+const structures_arr = Object.keys(structures).map((key) => structures[key]);
+
+let failed_structures = 0;
+
+for (let i = 0; i < structure_atempts; i++)
+{
+    const structure = structures_arr[Math.floor(Math.random() * structures_arr.length)];
+
+    const angle = Math.floor(Math.random() * 4) * 90;
+
+    const width = (angle == 90 || angle == 270) ? structure.height : structure.width;
+    const height = (angle == 90 || angle == 270) ? structure.width : structure.height;
+
+    const x = Math.floor(Math.random() * (world_area_size - width));
+    const y = Math.floor(Math.random() * (world_area_size - height));
+
+    let can_place = true;
+    for (let j = x; j < x + width; j++)
+    {
+        for (let k = y; k < y + height; k++)
+        {
+            if (structure_cells[j][k] != 0)
+            {
+                can_place = false;
+                j = x + width, k = y + height;
+            }
+        }
+    }
+
+    if (!can_place)
+    {
+        failed_structures += 1;
+        continue;
+    }
+
+    for (let j = x; j < x + width; j++)
+    {
+        for (let k = y; k < y + height; k++)
+        {
+            structure_cells[j][k] = 1;
+        }
+    }
+
+    structure.create(x, y, angle);
+}
+
+console.log("Spawned " + (structure_atempts - failed_structures) +
+    " Structures out of " + structure_atempts +
+    " (" + ((structure_atempts - failed_structures) / structure_atempts * 100).toFixed(1) + "%)");
+
 
 // init Entities
 /** @type {Player} */

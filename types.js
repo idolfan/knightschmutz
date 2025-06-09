@@ -292,3 +292,19 @@ const Entity_Type = {
  * @property {Color} color - outer color
  * @property {[x: number, y: number]} speed - in cells per second
  */
+
+/** 
+ * @typedef {Array<[equipment: Create_Equipment, weight: number]>} Loot_Table
+ */
+
+/**
+ * @typedef {Array<Array>} Cells
+ */
+
+/**
+ * @typedef {Object} Structure
+ * @property {(x: number, y: number, angle: 0 | 90 | 180 | 270)} create
+ * @property {Cells} standard_cells
+ * @property {number} width - in cells
+ * @property {number} height - in cells
+ */
