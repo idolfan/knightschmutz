@@ -427,7 +427,7 @@ const hammer_spell = (favour) => {
         effect_functions: [cost_mana,
             (context, action) => {
                 const target_cell = context.target_cell;
-                area_board[target_cell[0]][target_cell[1]] = 0;
+                area_board[target_cell[0]][target_cell[1]] = Cell_Type.EMPTY;
                 action.cooldown_date = tick_counter;
             }],
         cooldown: ticks_per_second * 4,
@@ -446,7 +446,7 @@ const construct_spell = (favour) => {
         effect_functions: [cost_mana,
             (context, action) => {
                 const target_cell = context.target_cell;
-                area_board[target_cell[0]][target_cell[1]] = 1;
+                area_board[target_cell[0]][target_cell[1]] = Cell_Type.WALL;
                 action.cooldown_date = tick_counter;
             }],
         cooldown: ticks_per_second * 10,
@@ -1180,17 +1180,17 @@ function roll_for_table(loot_table, table_sum) {
 }
 
 // World generation
-area_board = Array.from({ length: world_area_size }, () => Array(world_area_size).fill(0));
+area_board = Array.from({ length: world_area_size }, () => Array(world_area_size).fill(Cell_Type.EMPTY));
 for (let i = 0; i < world_area_size; i++)
 {
     for (let j = 0; j < world_area_size; j++)
     {
         const random = Math.random();
-        area_board[i][j] = random > 0.66 ? 1
-            : random > 0.003 ? 0
-                : 2;
+        area_board[i][j] = random > 0.66 ? Cell_Type.WALL
+            : random > 0.003 ? Cell_Type.EMPTY
+                : Cell_Type.CHEST;
 
-        if (area_board[i][j] == 2)
+        if (area_board[i][j] == Cell_Type.CHEST)
         {
             const equipments = [];
 
@@ -1543,15 +1543,41 @@ const camera_speed = 7;
 
 const clouds = [
     {
-        x: 26, y: 15, radius_1: 4, radius_2: 12, offset_x: 0, offset_y: 0, color_1: "rgb(0,0,0,0.4)", color_2: "rgb(0,0,0,0.0)", speed: [0.2, 0.1],
+        x: 26, y: 15, radius_1: 4, radius_2: 12, offset_x: 0, offset_y: 0, color_1: "rgb(0,0,0,0.5)", color_2: "rgb(0,0,0,0.0)", speed: [0.2, 0.1],
     },
     {
-        x: 40, y: 25, radius_1: 0, radius_2: 12, offset_x: 3, offset_y: 2, color_1: "rgb(0,0,0,0.4)", color_2: "rgb(0,0,0,0.0)", speed: [-0.1, 0.2],
+        x: 40, y: 25, radius_1: 0, radius_2: 12, offset_x: 3, offset_y: 2, color_1: "rgb(0,0,0,0.5)", color_2: "rgb(0,0,0,0.0)", speed: [-0.1, 0.2],
     },
     {
-        x: 30, y: 55, radius_1: 0, radius_2: 13, offset_x: 3, offset_y: 2, color_1: "rgb(0,0,0,0.4)", color_2: "rgb(0,0,0,0.0)", speed: [-0.3, -0.1],
+        x: 30, y: 55, radius_1: 0, radius_2: 13, offset_x: 3, offset_y: 2, color_1: "rgb(0,0,0,0.5)", color_2: "rgb(0,0,0,0.0)", speed: [-0.3, -0.1],
     }
 ]
+
+for (let h = 0; h < clouds.length; h++)
+{
+    const cloud = clouds[h];
+    const raindrops = [];
+    for (let i = 0; i < 50; i++)
+    {
+        let x;
+        let y;
+        do
+        {
+            x = (Math.random() - 0.5) * 2;
+            y = (Math.random() - 0.5) * 2;
+        } while (x * x + y * y > 1);
+
+        raindrops.push({
+            x: x * cell_size * cloud.radius_2,
+            y: y * cell_size * cloud.radius_2,
+            height: canvas.height * Math.random(),
+            length: 12 + Math.random() * 5,
+            speed: 9 + Math.random() * 2,
+        });
+    }
+
+    cloud.raindrops = raindrops;
+}
 
 /** @type {Array<Visual_Effect>} */
 const visual_effects = [];
@@ -1666,9 +1692,10 @@ function draw(time) {
         {
             if (area_board[i][j] === Cell_Type.WALL)
             {
+                let color = 'rgb(64, 64, 64, 1)'
                 ctx.fillStyle = 'black';
                 ctx.fillRect(i * cell_size, j * cell_size + cell_size / 2, cell_size, 0.5 * cell_size);
-                ctx.fillStyle = 'rgb(64, 64, 64, 1)'
+                ctx.fillStyle = color;
                 ctx.fillRect(i * cell_size, (j - 0.5) * cell_size, cell_size, cell_size);
             } else if (area_board[i][j] === Cell_Type.CHEST)
             {
@@ -1676,7 +1703,7 @@ function draw(time) {
             } else if (area_board[i][j] === Cell_Type.EMPTY)
             {
                 ctx.fillStyle = 'rgb(0, 128, 40, 0.2)'
-                ctx.fillRect(i * cell_size + grid_width /2, j * cell_size + grid_width / 2, cell_size - grid_width, cell_size - grid_width);
+                ctx.fillRect(i * cell_size + grid_width / 2, j * cell_size + grid_width / 2, cell_size - grid_width, cell_size - grid_width);
             }
         }
     }
@@ -1879,6 +1906,7 @@ function draw(time) {
     ctx.closePath();
 
     draw_clouds(time);
+    draw_rain();
 
     ctx.translate(-translation[0], -translation[1]);
 
@@ -2363,6 +2391,30 @@ function draw_clouds(time) {
     });
 }
 
+function draw_rain() {
+
+    for (let i = 0; i < clouds.length; i++)
+    {
+        const cloud = clouds[i];
+        ctx.strokeStyle = 'rgba(173, 216, 256, 0.5)';
+        ctx.lineWidth = 6 * zoom / 2;
+        ctx.beginPath();
+        for (let drop of cloud.raindrops)
+        {
+            ctx.moveTo(cloud.x * cell_size + drop.x * zoom / 2, cloud.y * cell_size + drop.y * zoom / 2 - drop.height / 2);
+            ctx.lineTo(cloud.x * cell_size + drop.x * zoom / 2, cloud.y * cell_size + drop.y * zoom / 2 - drop.height / 2 + drop.length * zoom / 2);
+            drop.height -= drop.speed * zoom / 2;
+            if (drop.height <= 0)
+            {
+                drop.height += canvas.height;
+            }
+        }
+
+        ctx.stroke();
+    }
+
+}
+
 //#endregion -----------------------------------------------------------------------
 //#region --------------------- Input handling -------------------------------------
 
@@ -2567,7 +2619,7 @@ function handle_inputs() {
             inventory_zones[0].visible = false;
             inventory_zones[1].visible = false;
             inventory_zones[2].visible = false;
-        } else if (cell == 2)
+        } else if (cell == Cell_Type.CHEST)
         {
             opened_inventory = chest_inventories.get(player_entity.x + " " + player_entity.y);
 
@@ -3181,7 +3233,7 @@ function calculate_path_positions(start, end) {
         for (const [dx, dy] of [[0, 1], [1, 0], [0, -1], [-1, 0]])
         {
             const [nx, ny] = [x + dx, y + dy];
-            if (nx >= 0 && nx < cols && ny >= 0 && ny < rows && (area_board[nx][ny] === 0 || area_board[nx][ny] === 2))
+            if (nx >= 0 && nx < cols && ny >= 0 && ny < rows && (area_board[nx][ny] === Cell_Type.EMPTY || area_board[nx][ny] === Cell_Type.CHEST))
             {
                 const key = posToStr([nx, ny]);
                 const in_boundaries = nx >= x_boundaries[0] && nx <= x_boundaries[1] && ny >= y_boundaries[0] && ny <= y_boundaries[1];

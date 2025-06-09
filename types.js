@@ -279,3 +279,16 @@ const Entity_Type = {
 /**
  * @typedef {[x: number, y: number, width: number, height: number]} Dimensions
  */
+
+/**
+ * @typedef {Object} Cloud
+ * @property {number} x - cell x
+ * @property {number} y - cell y
+ * @property {number} radius_1 - inner radius in cells
+ * @property {number} radius_2 - outer radius in cells
+ * @property {number} offset_x
+ * @property {number} offset_y
+ * @property {Color} color - inner color
+ * @property {Color} color - outer color
+ * @property {[x: number, y: number]} speed - in cells per second
+ */
