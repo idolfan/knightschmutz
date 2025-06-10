@@ -64,6 +64,10 @@ const Entity_Type = {
  * @property {number} wandering.range
  * @property {Object} patroling
  * @property {Object} protecting
+ * @property {number} protecting.x - in cells
+ * @property {number} protecting.y - in cells
+ * @property {number} protecting.max_distance - in cells
+ * @property {number} protecting.range - in cells
  * @property {Object} idle
  * @property {Object} fleeing
  * @property {Object} kiting
@@ -90,6 +94,7 @@ const Entity_Type = {
  * @callback Create_Entity
  * @param {number} x
  * @param {number} y
+ * @param {number} [protecting]
  * @returns {Entity}
  */
 
@@ -305,6 +310,7 @@ const Entity_Type = {
  * @typedef {Object} Structure
  * @property {(x: number, y: number, angle: 0 | 90 | 180 | 270)} create
  * @property {Cells} standard_cells
+ * @property {Cells} other_cells - for Entities and chests
  * @property {number} width - in cells
  * @property {number} height - in cells
  */

@@ -2,7 +2,7 @@ Fixes: -----------------------------------------
 - possible weird right click behaviour ( stucking player & melee enemy, with one space in between)
 Features: --------------------------------------
 - PROTECTING ( Defending ?) phase
-- World generation ( structures with chests & enemies )
+- World generation ( structures with chests & enemies ) |
   -> Protecting phase for spawned enemies
 - armor / dmg reduction system
 - auto mob spawning
@@ -10,7 +10,7 @@ Features: --------------------------------------
 - effects on equipment + hover info about it in inventory
 - hover on enemies info hud element
 - test mode ( for game init, maybe with hotkey during loading)
-
+- Status Effects ( Freezing , wet -> rain?, ..)
 
 
 - WINDOWS + V

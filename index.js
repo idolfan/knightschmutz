@@ -65,7 +65,8 @@ info_small_image.src = './images/info_small.png';
 const Cell_Type = Object.freeze({
     EMPTY: 0,
     WALL: 1,
-    CHEST: 2
+    CHEST: 2,
+    ENTITY: 3,
 });
 
 const Stat_Display_Names = Object.freeze({
@@ -1046,7 +1047,7 @@ function close_inventory(inventory) {
 //#region -------------------- Entity definitions ----------------------------------
 
 /** @type {Create_Entity} */
-const red_melee_entity = (x, y) => {
+const red_melee_entity = (x, y, protecting) => {
     const melee_attack_instance = melee_attack();
     return {
         display_name: "Mean Red Square",
@@ -1062,7 +1063,7 @@ const red_melee_entity = (x, y) => {
         enemy_type: Enemy_Type.RED_MELEE,
         basic_attack: melee_attack_instance,
         weapon: test_sword_equipment(),
-        phase: Phase.WANDERING,
+        phase: protecting ? Phase.PROTECTING : Phase.WANDERING,
         phase_states: {
             chasing: {
                 action: melee_attack_instance,
@@ -1071,7 +1072,12 @@ const red_melee_entity = (x, y) => {
             },
             wandering: {
                 range: 5
+            },
+            protecting: {
+                max_distance: 5,
+                range: 10,
             }
+
         }
     }
 }
@@ -1165,11 +1171,19 @@ const structures = {
                 add_equipments_from_table(null, table, loot_table_sums.get(table), 2, favour),
             ]
 
+            const entities = [
+                red_melee_entity(x, y, true),
+                red_melee_entity(x, y, true),
+            ]
+
             const cells = this.standard_cells.map(row => [...row]);
+            const other_cells = this.other_cells.map(row => [...row]);
 
             replace_with_equipments(cells, chests_equipments);
+            replace_with_entities(other_cells, entities);
 
             place_cells(rotated_array2(cells, angle), x, y);
+            place_other_cells(rotated_array2(other_cells, angle), x, y);
 
         },
         standard_cells: [
@@ -1178,7 +1192,15 @@ const structures = {
             [1, 0, 0, 0, 1],
             [1, 0, 0, 0, 1],
             [1, 1, 0, 1, 1],
-            [u, u, u, u, u],
+            [u, 0, u, 0, u],
+        ],
+        other_cells: [
+            [0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0],
+            [0, 3, 0, 3, 0],
         ],
         width: 6,
         height: 5,
@@ -1236,7 +1258,7 @@ function rotated_array2(array2, angle) {
     return rotated;
 }
 
-/** @type {(cells: Cells)} */
+/** @type {(cells: Cells, chests_equipments: Array<Array<equipments>>)} */
 function replace_with_equipments(cells, chests_equipments) {
     let ce_index = 0;
     for (let i = 0; i < cells.length; i++)
@@ -1257,6 +1279,26 @@ function replace_with_equipments(cells, chests_equipments) {
         throw new Error("Bad replace_width_equipments usage. Cells had more chests than chests_equipments", cells, chests_equipments);
 }
 
+/** @type {(cells: Cells, entities: Array<Entity>)} */
+function replace_with_entities(cells, entities) {
+    let e_index = 0;
+    for (let i = 0; i < cells.length; i++)
+    {
+        const row = cells[i];
+        for (let j = 0; j < row.length; j++)
+        {
+            if (row[j] === Cell_Type.ENTITY)
+            {
+                const entity = entities[e_index];
+                row[j] = entity;
+                e_index++;
+            }
+        }
+    }
+    if (e_index > entities.length)
+        throw new Error("Bad replace_with_entities usage. Cells had more entities than entities", cells, entities);
+}
+
 /** @type {(cells: Cells)} */
 function place_cells(cells, x, y) {
     for (let i = 0; i < cells.length; i++)
@@ -1269,11 +1311,38 @@ function place_cells(cells, x, y) {
             {
                 area_board[i + x][j + y] = Cell_Type.CHEST;
                 chest_inventories.set(i + " " + j, value);
-            } else if (value == -1)
+            } else if (value.enemy_type != null)
+            {
+                value.x = i + x;
+                value.y = j + y;
+                add_entity(value);
+            }
+            else if (value == -1)
             {
 
             } else
                 area_board[i + x][j + y] = value;
+        }
+    }
+}
+
+function place_other_cells(cells, x, y) {
+    for (let i = 0; i < cells.length; i++)
+    {
+        const row = cells[i];
+        for (let j = 0; j < row.length; j++)
+        {
+            const value = cells[i][j];
+            if (value.slot_count)
+            {
+                area_board[i + x][j + y] = Cell_Type.CHEST;
+                chest_inventories.set(i + " " + j, value);
+            } else if (value.enemy_type != null)
+            {
+                value.x = i + x;
+                value.y = j + y;
+                add_entity(value);
+            }
         }
     }
 }
@@ -1392,95 +1461,97 @@ for (let i = 1; i < world_area_size - 1; i++)
     }
 }
 
-// Structures
 
-const structure_cells = Array.from({ length: world_area_size }, () => Array(world_area_size).fill(0));
+{ // Structures
+    const structure_cells = Array.from({ length: world_area_size }, () => Array(world_area_size).fill(0));
 
-const structure_density = 14 / (100 * 100)
+    const structure_density = 14 / (100 * 100)
 
-const structure_atempts = Math.ceil(structure_density * world_area_size * world_area_size);
+    const structure_atempts = Math.ceil(structure_density * world_area_size * world_area_size);
 
-/** @type {Array<Structure>} */
-const structures_arr = Object.keys(structures).map((key) => structures[key]);
+    /** @type {Array<Structure>} */
+    const structures_arr = Object.keys(structures).map((key) => structures[key]);
 
-let failed_structures = 0;
+    let failed_structures = 0;
 
-for (let i = 0; i < structure_atempts; i++)
-{
-    const structure = structures_arr[Math.floor(Math.random() * structures_arr.length)];
-
-    const angle = Math.floor(Math.random() * 4) * 90;
-
-    const width = (angle == 90 || angle == 270) ? structure.height : structure.width;
-    const height = (angle == 90 || angle == 270) ? structure.width : structure.height;
-
-    const x = Math.floor(Math.random() * (world_area_size - width));
-    const y = Math.floor(Math.random() * (world_area_size - height));
-
-    let can_place = true;
-    for (let j = x; j < x + width; j++)
+    for (let i = 0; i < structure_atempts; i++)
     {
-        for (let k = y; k < y + height; k++)
+        const structure = structures_arr[Math.floor(Math.random() * structures_arr.length)];
+
+        const angle = Math.floor(Math.random() * 4) * 90;
+
+        const width = (angle == 90 || angle == 270) ? structure.height : structure.width;
+        const height = (angle == 90 || angle == 270) ? structure.width : structure.height;
+
+        const x = Math.floor(Math.random() * (world_area_size - width));
+        const y = Math.floor(Math.random() * (world_area_size - height));
+
+        let can_place = true;
+        for (let j = x; j < x + width; j++)
         {
-            if (structure_cells[j][k] != 0)
+            for (let k = y; k < y + height; k++)
             {
-                can_place = false;
-                j = x + width, k = y + height;
+                if (structure_cells[j][k] != 0)
+                {
+                    can_place = false;
+                    j = x + width, k = y + height;
+                }
             }
         }
-    }
 
-    if (!can_place)
-    {
-        failed_structures += 1;
-        continue;
-    }
-
-    for (let j = x; j < x + width; j++)
-    {
-        for (let k = y; k < y + height; k++)
+        if (!can_place)
         {
-            structure_cells[j][k] = 1;
+            failed_structures += 1;
+            continue;
         }
+
+        for (let j = x; j < x + width; j++)
+        {
+            for (let k = y; k < y + height; k++)
+            {
+                structure_cells[j][k] = 1;
+            }
+        }
+
+        structure.create(x, y, angle);
     }
 
-    structure.create(x, y, angle);
+    console.log("Spawned " + (structure_atempts - failed_structures) +
+        " Structures out of " + structure_atempts +
+        " (" + ((structure_atempts - failed_structures) / structure_atempts * 100).toFixed(1) + "%)");
+
 }
 
-console.log("Spawned " + (structure_atempts - failed_structures) +
-    " Structures out of " + structure_atempts +
-    " (" + ((structure_atempts - failed_structures) / structure_atempts * 100).toFixed(1) + "%)");
+{ // init Entities
+    /** @type {Player} */
+    const player = {
+        id: id_counter++,
+        display_name: "test",
+    }
+
+    add_player(player);
+    player_entity = entities[player.entity_index];
 
 
-// init Entities
-/** @type {Player} */
-const player = {
-    id: id_counter++,
-    display_name: "test",
-}
+    /** @type {Array<Entity>} */
+    const start_entites = [
+        red_melee_entity(20, 20),
+        /* red_melee_entity(30, 30),
+        red_melee_entity(40, 40),
+        red_bow_entity(30, 40),
+        red_bow_entity(20, 40),
+        red_bow_entity(40, 10),
+        red_mage_entity(15, 30),
+        red_mage_entity(8, 35),
+        red_mage_entity(25, 30), */
 
-add_player(player);
-player_entity = entities[player.entity_index];
+    ]
 
-
-/** @type {Array<Entity>} */
-const start_entites = [
-    red_melee_entity(20, 20),
-    red_melee_entity(30, 30),
-    red_melee_entity(40, 40),
-    red_bow_entity(30, 40),
-    red_bow_entity(20, 40),
-    red_bow_entity(40, 10),
-    red_mage_entity(15, 30),
-    red_mage_entity(8, 35),
-    red_mage_entity(25, 30),
-
-]
-
-for (let i = 0; i < start_entites.length; i++)
-{
-    const entity = start_entites[i];
-    add_entity(entity);
+    for (let i = 0; i < start_entites.length; i++)
+    {
+        const entity = start_entites[i];
+        add_entity(entity);
+    }
 }
 
 //#endregion -----------------------------------------------------------------------
@@ -1554,6 +1625,11 @@ function add_entity(entity) {
     {
         enemy_entities.push(entity);
         entity.enemy_entity_index = enemy_entities.length - 1;
+    }
+
+    if(entity.phase == Phase.PROTECTING){
+        entity.phase_states.protecting.x = entity.x;
+        entity.phase_states.protecting.y = entity.y;
     }
 
     calculate_entity_stats(entity);
@@ -3232,15 +3308,40 @@ function process_enemy_ai() {
         entity.target_cell = [closest_player_entity.x, closest_player_entity.y];
 
         const { aggro_range: chase_aggro_range, lose_range: chase_lose_range } = entity.phase_states.chasing;
+        const protecting = entity.phase_states.protecting || {};
         const phase = entity.phase;
 
-        chasing: if (phase == Phase.CHASING)
-        {
+        const x_distance = entity.x - protecting.x;
+        const y_distance = entity.y - protecting.y;
+        const distance_2 = (x_distance) * (x_distance) + (y_distance) * (y_distance);
+        const too_far = protecting.max_distance && (protecting.max_distance * protecting.max_distance < distance_2);
+        const player_in_bay = ((closest_player_entity.x - protecting.x) * (closest_player_entity.x - protecting.x) +
+                (closest_player_entity.y - protecting.y) * (closest_player_entity.y - protecting.y)) < protecting.range * protecting.range;
 
+        const has_to_protect = protecting?.x != null && protecting?.y != null;
+
+        has_to_protect: if (has_to_protect && phase != Phase.PROTECTING)
+        {
+            if (!player_in_bay) entity.phase = Phase.PROTECTING;
+        }
+
+        protecting: if (phase == Phase.PROTECTING)
+        {
+            process_standard_protecting(entity);
+            if(entity.path.blocked_by) console.log('p', too_far, player_in_bay)
+            if (player_in_bay)
+            {
+                if(entity.path.blocked_by) console.log('p-c');
+                entity.phase = Phase.CHASING;
+                entity.phase_states.chasing.target = closest_player_entity;
+            }
+        }
+        else chasing: if (phase == Phase.CHASING)
+        {
             if (entity.enemy_type == Enemy_Type.RED_MELEE)
             {
 
-                process_standard_chasing(entity);
+                process_standard_chasing(entity, entity.path?.blocked_by);
 
                 if (distance_to_closest_player > chase_lose_range)
                     entity.phase = Phase.WANDERING;
@@ -3272,6 +3373,9 @@ function process_enemy_ai() {
                 const cooldown_up = tick_counter - action.cooldown_date >= action.cooldown;
 
                 const failed_action = try_action({ source_entity: entity, target_entity: closest_player_entity }, action);
+
+                if (distance_to_closest_player > chase_lose_range)
+                    entity.phase = Phase.WANDERING;
 
                 if (distance_to_closest_player < action.range / 2)
                 {
@@ -3331,6 +3435,21 @@ function process_standard_wandering(entity) {
 }
 
 /** @type {(entity: Entity)} */
+function process_standard_protecting(entity) {
+    const protecting = entity.phase_states.protecting;
+
+    const is_at_bay = entity.x == protecting.x && entity.y == protecting.y;
+
+    if (is_at_bay) return;
+
+    if (entity.phase_states.new_phase_change || entity.path.blocked_by)
+    {
+        const path_steps = calculate_path_positions([entity.x, entity.y], [protecting.x, protecting.y], !!entity.path?.blocked_by);
+        if (path_steps != null) change_path(entity, path_steps);
+    }
+}
+
+/** @type {(entity: Entity)} */
 function process_standard_chasing(entity) {
     const { target, action } = entity.phase_states.chasing;
     if (!target) throw new Error;
@@ -3359,7 +3478,7 @@ function process_standard_chasing(entity) {
         return;
     }
 
-    const path_steps = calculate_path_positions([entity.x, entity.y], [target.x, target.y]);
+    const path_steps = calculate_path_positions([entity.x, entity.y], [target.x, target.y], entity.path?.blocked_by);
     if (path_steps != null) change_path(entity, path_steps);
 
 }
@@ -3439,8 +3558,8 @@ function restart_tick() {
     }, 1000 / ticks_per_second);
 }
 
-/** @type {(start: Array<number>, end: Array<number>)} */
-function calculate_path_positions(start, end) {
+/** @type {(start: Array<number>, end: Array<number>, with_entities?: boolean)} */
+function calculate_path_positions(start, end, with_entities) {
     const queue = [[start]];
     const visited = new Set();
     const [rows, cols] = [area_board.length, area_board[0].length];
@@ -3465,7 +3584,7 @@ function calculate_path_positions(start, end) {
         for (const [dx, dy] of [[0, 1], [1, 0], [0, -1], [-1, 0]])
         {
             const [nx, ny] = [x + dx, y + dy];
-            if (nx >= 0 && nx < cols && ny >= 0 && ny < rows && (area_board[nx][ny] === Cell_Type.EMPTY || area_board[nx][ny] === Cell_Type.CHEST))
+            if (nx >= 0 && nx < cols && ny >= 0 && ny < rows && ((area_board[nx][ny] === Cell_Type.EMPTY || area_board[nx][ny] === Cell_Type.CHEST) && (!with_entities || !entity_positions[nx][ny])))
             {
                 const key = posToStr([nx, ny]);
                 const in_boundaries = nx >= x_boundaries[0] && nx <= x_boundaries[1] && ny >= y_boundaries[0] && ny <= y_boundaries[1];
