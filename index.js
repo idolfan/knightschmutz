@@ -58,6 +58,8 @@ const spike_image = new Image();
 spike_image.src = './images/spike.png';
 const info_small_image = new Image();
 info_small_image.src = './images/info_small.png';
+const freeze_image = new Image();
+freeze_image.src = './images/freeze_visual.png';
 
 //#endregion -----------------------------------------------------------------------
 //#region ----------------------- Constants ----------------------------------------
@@ -121,6 +123,24 @@ const Phase = {
     KITING: 'KITING',
     PATHING: 'PATHING',
     DEAD: 'DEAD',
+}
+
+/**
+ * @enum {string}
+ */
+const Action_Type = {
+    ATTACK: 'ATTACK',
+    SPELL: 'SPELL',
+}
+
+/**
+ * @enum {string}
+ */
+const Status_Effect = {
+    BURNING: 'burning',
+    FREEZING: 'freezing',
+    WET: 'wet',
+    ELECTROCUTED: 'electrocuted',
 }
 
 //#endregion -----------------------------------------------------------------------
@@ -299,6 +319,7 @@ const cost_mana = (context, action) => {
 const melee_attack = (favour) => {
     return {
         name: "Melee attack",
+        type: Action_Type.ATTACK,
         requirements: [in_range_requirement, not_self_requirement, attack_timer_up_requirement],
         effect_functions: [(context) => {
             const combat_context = {
@@ -345,6 +366,7 @@ const melee_attack = (favour) => {
 const bow_attack = (favour) => {
     return {
         name: "Bow attack",
+        type: Action_Type.ATTACK,
         requirements: [in_range_requirement, not_self_requirement, attack_timer_up_requirement],
         effect_functions: [(context) => {
             const combat_context = {
@@ -402,6 +424,7 @@ const bow_attack = (favour) => {
 const heal_spell = (favour) => {
     return {
         name: "Heal",
+        type: Action_Type.SPELL,
         requirements: [in_range_requirement, cooldown_up_requirement, mana_available_requirement],
         effect_functions: [cost_mana,
             (context, action) => {
@@ -424,6 +447,7 @@ const heal_spell = (favour) => {
 const hammer_spell = (favour) => {
     return {
         name: "Destruct",
+        type: Action_Type.SPELL,
         requirements: [in_cell_range_requirement, cooldown_up_requirement, mana_available_requirement],
         effect_functions: [cost_mana,
             (context, action) => {
@@ -443,6 +467,7 @@ const hammer_spell = (favour) => {
 const construct_spell = (favour) => {
     return {
         name: "Construct",
+        type: Action_Type.SPELL,
         requirements: [in_cell_range_requirement, cooldown_up_requirement, mana_available_requirement],
         effect_functions: [cost_mana,
             (context, action) => {
@@ -462,6 +487,7 @@ const construct_spell = (favour) => {
 const spike_spell = (favour) => {
     return {
         name: "Spike spell",
+        type: Action_Type.SPELL,
         requirements: [in_cell_range_requirement, cooldown_up_requirement, mana_available_requirement],
         effect_functions: [
             cost_mana,
@@ -505,6 +531,63 @@ const spike_spell = (favour) => {
         cooldown_date: tick_counter - ticks_per_second * 10,
         image: spike_image,
         mana_cost: 5,
+        range: 10,
+    }
+}
+
+/** @type {Create_Action} */
+const freeze_spell = (favour) => {
+    return {
+        name: "Freeze",
+        type: Action_Type.SPELL,
+        requirements: [in_cell_range_requirement, cooldown_up_requirement, mana_available_requirement],
+        effect_functions: [
+            cost_mana,
+            (context, action) => {
+                action.cooldown_date = tick_counter;
+                const size_c = 3;
+                const indicator = aoe_indicator_effect(context.target_cell[0], context.target_cell[1], size_c, ticks_per_second * 1.5);
+                visual_effects.push(indicator);
+                scheduled_callbacks.push({
+                    callbacks: [
+                        (cont) => {
+                            const cell = cont.target_cell;
+                            const entities = entities_inside(context.target_cell[0], context.target_cell[1], size_c);
+
+                            visual_effects.push({
+                                duration: ticks_per_second,
+                                size: 3,
+                                time: 0,
+                                x: cell[0],
+                                y: cell[1],
+                                image: freeze_image,
+                                peak_at: 0.2,
+
+                            })
+
+                            for (let i = 0; i < entities.length; i++)
+                            {
+                                const entity = entities[i];
+                                affect_entity({
+                                    source_entity: context.source_entity,
+                                    target_entity: entity,
+                                    damage: {
+                                        amount: 7,
+                                        status_effect: Status_Effect.FREEZING,
+                                    }
+                                })
+                            }
+                        }
+                    ],
+                    contexts: [context],
+                    tick_date: tick_counter + ticks_per_second * 1.5,
+                })
+            }
+        ],
+        cooldown: ticks_per_second * 10,
+        cooldown_date: tick_counter - ticks_per_second * 10,
+        image: freeze_image,
+        mana_cost: 10,
         range: 10,
     }
 }
@@ -1465,7 +1548,7 @@ for (let i = 1; i < world_area_size - 1; i++)
 { // Structures
     const structure_cells = Array.from({ length: world_area_size }, () => Array(world_area_size).fill(0));
 
-    const structure_density = 14 / (100 * 100)
+    const structure_density = 12 / (100 * 100)
 
     const structure_atempts = Math.ceil(structure_density * world_area_size * world_area_size);
 
@@ -1563,7 +1646,10 @@ function calculate_entity_stats(entity) {
     const hp_percent = entity?.stats?.current_hp / entity?.stats?.max_hp;
     const mana_percent = entity?.stats?.current_mana / entity?.stats?.max_mana;
 
+    const old_movement_speed = entity.stats?.movement_speed;
+
     entity.stats = { ...entity.base_stats }
+
     if (entity.equipped_items?.equipments && entity.equipped_items?.equipments.length != 0)
     {
 
@@ -1593,9 +1679,21 @@ function calculate_entity_stats(entity) {
         }
     }
 
+    if (entity.status_effects && entity.status_effects.freezing != 0)
+    {
+        const speed_mult = 10 / Math.max(10, (10 + entity.status_effects.freezing));
+        entity.stats.movement_speed *= speed_mult;
+        console.log("f");
+    }
+
     if (entity?.stats?.current_hp) entity.stats.current_hp = entity.stats.max_hp * hp_percent;
 
     if (entity?.stats?.current_mana) entity.stats.current_mana = entity.stats.max_mana * mana_percent;
+
+    if(old_movement_speed != null && old_movement_speed != entity.stats.movement_speed && entity.path) {
+        entity.path.visual_progress *= entity.stats.movement_speed / old_movement_speed;
+        console.log("changed v");
+    }
 }
 
 /** @type {(entity: Entity) => Entity} */
@@ -1627,7 +1725,8 @@ function add_entity(entity) {
         entity.enemy_entity_index = enemy_entities.length - 1;
     }
 
-    if(entity.phase == Phase.PROTECTING){
+    if (entity.phase == Phase.PROTECTING)
+    {
         entity.phase_states.protecting.x = entity.x;
         entity.phase_states.protecting.y = entity.y;
     }
@@ -1673,6 +1772,7 @@ function add_player(player) {
             hammer_spell(),
             construct_spell(),
             spike_spell(),
+            freeze_spell(),
         ],
         phase_states: {
             chasing: {
@@ -1760,6 +1860,28 @@ function damage_entity(combat_context) {
 }
 
 /** @type {(combat_context: Combat_Context)} */
+function affect_entity(combat_context) {
+    const target_entity = combat_context.target_entity;
+
+    let resulting_amount = combat_context.damage.amount;
+
+    if (combat_context.damage.status_effect)
+    {
+        if(!target_entity.status_effects) target_entity.status_effects = {};
+
+        const status_effect = combat_context.damage.status_effect;
+        const old_value = target_entity.status_effects[status_effect] || 0;
+        target_entity.status_effects[status_effect] = old_value + combat_context.damage.amount;
+    }
+
+    calculate_entity_stats(target_entity);
+
+    combat_context.damage.resulting_amount = resulting_amount;
+
+    //console.log('Damaged entity', target_entity);
+}
+
+/** @type {(combat_context: Combat_Context)} */
 function heal_entity(combat_context) {
     const target_entity = combat_context.target_entity;
     target_entity.stats.current_hp += combat_context.damage.amount;
@@ -1837,6 +1959,44 @@ function entity_on_kill(combat_context) {
             on_kill_callback(combat_context);
         })
     }
+}
+
+
+/** @type {(p1: [x,y], p2: [x,y]) => Entity[]} */
+function entities_in_rect(p1, p2) {
+    const entities = [];
+    const x1 = Math.max(0, p1[0]);
+    const y1 = Math.max(0, p1[1]);
+    const x2 = Math.min(world_area_size - 1, p2[0]);
+    const y2 = Math.min(world_area_size - 1, p2[1]);
+    for (let i = x1; i <= x2; i++)
+    {
+        for (let j = y1; j <= y2; j++)
+        {
+            const entitiy = entity_positions[i][j];
+            if (entity) entities.push(entity);
+        }
+    }
+}
+
+/** @type {(x: number, y: number, size: number) => Entity[]} */
+function entities_inside(x, y, size) {
+    const result = [];
+    const r = (size - 1) / 2;
+    const x1 = Math.max(0, x - r);
+    const y1 = Math.max(0, y - r);
+    const x2 = Math.min(world_area_size - 1, x + r);
+    const y2 = Math.min(world_area_size - 1, y + r);
+    for (let i = x1; i <= x2; i++)
+    {
+        for (let j = y1; j <= y2; j++)
+        {
+            const entity = entity_positions[i][j];
+            if (entity) result.push(entity);
+        }
+    }
+
+    return result;
 }
 
 
@@ -2091,6 +2251,10 @@ function draw(time) {
     {
         hovered_entity = entity_on_hovered_cell;
         time_since_entity_hovered = 0;
+    }
+
+    if(time_since_entity_hovered == 2 && hovered_entity){
+        console.log('Hovered entity:', hovered_entity);
     }
 
     // Draw entities
@@ -3214,7 +3378,10 @@ function tick() {
             continue;
         }
 
-        if (path.path_steps.length === 0) continue;
+        if (path.path_steps.length === 0){ 
+            entity.path.blocked_by = null;
+            continue;
+        }
 
         const pos = path.path_steps[0];
         entity.next_x = pos[0];
@@ -3316,7 +3483,7 @@ function process_enemy_ai() {
         const distance_2 = (x_distance) * (x_distance) + (y_distance) * (y_distance);
         const too_far = protecting.max_distance && (protecting.max_distance * protecting.max_distance < distance_2);
         const player_in_bay = ((closest_player_entity.x - protecting.x) * (closest_player_entity.x - protecting.x) +
-                (closest_player_entity.y - protecting.y) * (closest_player_entity.y - protecting.y)) < protecting.range * protecting.range;
+            (closest_player_entity.y - protecting.y) * (closest_player_entity.y - protecting.y)) < protecting.range * protecting.range;
 
         const has_to_protect = protecting?.x != null && protecting?.y != null;
 
@@ -3328,10 +3495,8 @@ function process_enemy_ai() {
         protecting: if (phase == Phase.PROTECTING)
         {
             process_standard_protecting(entity);
-            if(entity.path.blocked_by) console.log('p', too_far, player_in_bay)
             if (player_in_bay)
             {
-                if(entity.path.blocked_by) console.log('p-c');
                 entity.phase = Phase.CHASING;
                 entity.phase_states.chasing.target = closest_player_entity;
             }

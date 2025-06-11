@@ -1,5 +1,6 @@
 Fixes: -----------------------------------------
 - possible weird right click behaviour ( stucking player & melee enemy, with one space in between)
+- enemy abrupt movement visuals
 Features: --------------------------------------
 - PROTECTING ( Defending ?) phase
 - World generation ( structures with chests & enemies ) |

@@ -43,6 +43,7 @@ const Entity_Type = {
  * @property {number} attack_timer - in ticks since last attack
  * @property {Entity_Stats} base_stats - Used to calculate stats
  * @property {Entity_Stats} stats - Actual stats being used during gameplay
+ * @property {Status_Effects} status_effects
  * @property {Inventory} equipped_items
  * @property {Inventory} inventory
  * @property {Action} basic_attack
@@ -91,6 +92,14 @@ const Entity_Type = {
  */
 
 /**
+ * @typedef {Object} Status_Effects
+ * @property {number} freezing
+ * @property {number} burning
+ * @property {number} wet
+ * @property {number} electrocuted
+ */
+
+/**
  * @callback Create_Entity
  * @param {number} x
  * @param {number} y
@@ -129,6 +138,7 @@ const Entity_Type = {
  * @property {number} cooldown_date - tick date of last use
  * @property {HTMLImageElement} image
  * @property {number} mana_cost
+ * @property {Action_Type} type
  */
 
 /** 
@@ -168,6 +178,7 @@ const Entity_Type = {
  * @typedef {Object} Damage
  * @property {number} amount
  * @property {number} resulting_amount
+ * @property {Status_Effect} [status_effect]
  */
 
 /**
