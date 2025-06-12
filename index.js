@@ -62,6 +62,22 @@ const freeze_image = new Image();
 freeze_image.src = './images/freeze_visual.png';
 const red_ghost_image = new Image();
 red_ghost_image.src = './images/red_ghost.png';
+const ruby_sword_image = new Image();
+ruby_sword_image.src = './images/ruby_sword.png';
+const emerald_sword_image = new Image();
+emerald_sword_image.src = './images/emerald_sword.png';
+const diamond_sword_image = new Image();
+diamond_sword_image.src = './images/diamond_sword.png';
+const gold_sword_image = new Image();
+gold_sword_image.src = './images/gold_sword.png';
+const emerald_chestplate_image = new Image();
+emerald_chestplate_image.src = './images/emerald_chestplate.png';
+const gold_chestplate_image = new Image();
+gold_chestplate_image.src = './images/gold_chestplate.png';
+const ruby_chestplate_image = new Image();
+ruby_chestplate_image.src = './images/ruby_chestplate.png';
+const diamond_chestplate_image = new Image();
+diamond_chestplate_image.src = './images/diamond_chestplate.png';
 
 //#endregion -----------------------------------------------------------------------
 //#region ----------------------- Constants ----------------------------------------
@@ -328,7 +344,7 @@ const melee_attack = (favour) => {
         effect_functions: [(context) => {
             const combat_context = {
                 ...context,
-                damage: { amount: 5 }
+                damage: { amount: 15 }
             }
             damage_entity(combat_context);
             context.source_entity.attack_timer = 0;
@@ -375,7 +391,7 @@ const bow_attack = (favour) => {
         effect_functions: [(context) => {
             const combat_context = {
                 ...context,
-                damage: { amount: 2 }
+                damage: { amount: 8 }
             }
             context.source_entity.attack_timer = 0;
             const distance = entity_distance(context.source_entity, context.target_entity);
@@ -434,7 +450,7 @@ const heal_spell = (favour) => {
             (context, action) => {
                 const combat_context = {
                     ...context,
-                    damage: { amount: 5 }
+                    damage: { amount: 30 }
                 }
                 action.cooldown_date = tick_counter;
                 heal_entity(combat_context);
@@ -443,7 +459,7 @@ const heal_spell = (favour) => {
         cooldown_date: tick_counter - ticks_per_second * 10,
         image: heal_Image,
         range: 10,
-        mana_cost: 10,
+        mana_cost: 25,
     }
 }
 
@@ -463,7 +479,7 @@ const hammer_spell = (favour) => {
         cooldown: ticks_per_second * 4,
         cooldown_date: tick_counter - ticks_per_second * 4,
         image: hammer_image,
-        mana_cost: 5,
+        mana_cost: 15,
         range: 1,
     }
 }
@@ -521,7 +537,7 @@ const spike_spell = (favour) => {
                                     source_entity: context.source_entity,
                                     target_entity: entity,
                                     damage: {
-                                        amount: 7
+                                        amount: 50
                                     }
                                 })
                             }
@@ -535,7 +551,7 @@ const spike_spell = (favour) => {
         cooldown: ticks_per_second * 10,
         cooldown_date: tick_counter - ticks_per_second * 10,
         image: spike_image,
-        mana_cost: 5,
+        mana_cost: 10,
         range: 10,
     }
 }
@@ -752,7 +768,7 @@ const test_amulet_equipment = (favour = 0) => {
 const test_chestplate_equipment = (favour = 0) => {
     return {
         flat_stats: {
-            armor: 2,
+            armor: 20,
         },
         multiplicative_stats: {
             max_hp: 1.1 + 0.05 * Math.trunc(favour / 10 + Math.random())
@@ -766,10 +782,74 @@ const test_chestplate_equipment = (favour = 0) => {
 }
 
 /** @type {Create_Equipment} */
+const emerald_chestplate_equipment = (favour = 0) => {
+    return {
+        flat_stats: {
+            armor: 20,
+        },
+        multiplicative_stats: {
+        },
+        type: Equipment_Type.CHESTPLATE,
+        image: emerald_chestplate_image,
+        id: id_counter++,
+        display_name: "Emerald Chestplate",
+        name: "emerald_chestplate",
+    }
+}
+
+/** @type {Create_Equipment} */
+const diamond_chestplate_equipment = (favour = 0) => {
+    return {
+        flat_stats: {
+            armor: 20,
+        },
+        multiplicative_stats: {
+        },
+        type: Equipment_Type.CHESTPLATE,
+        image: diamond_chestplate_image,
+        id: id_counter++,
+        display_name: "Diamond Chestplate",
+        name: "diamond_chestplate",
+    }
+}
+
+/** @type {Create_Equipment} */
+const ruby_chestplate_equipment = (favour = 0) => {
+    return {
+        flat_stats: {
+            armor: 20,
+        },
+        multiplicative_stats: {
+        },
+        type: Equipment_Type.CHESTPLATE,
+        image: ruby_chestplate_image,
+        id: id_counter++,
+        display_name: "Ruby Chestplate",
+        name: "ruby_chestplate",
+    }
+}
+
+/** @type {Create_Equipment} */
+const gold_chestplate_equipment = (favour = 0) => {
+    return {
+        flat_stats: {
+            armor: 20,
+        },
+        multiplicative_stats: {
+        },
+        type: Equipment_Type.CHESTPLATE,
+        image: gold_chestplate_image,
+        id: id_counter++,
+        display_name: "Gold Chestplate",
+        name: "gold_chestplate",
+    }
+}
+
+/** @type {Create_Equipment} */
 const test_helmet_equipment = (favour = 0) => {
     return {
         flat_stats: {
-            armor: 1 + Math.trunc(favour / 5 + Math.random()),
+            armor: 10 + Math.trunc(favour / 5 + Math.random()),
         },
         multiplicative_stats: {
             attack_speed: 1.1
@@ -798,6 +878,82 @@ const test_sword_equipment = (favour = 0) => {
         display_name: "Simple Sword",
         action: melee_attack(),
         name: "simple_sword",
+    }
+}
+
+/** @type {Create_Equipment} */
+const diamond_sword_equipment = (favour = 0) => {
+    return {
+        flat_stats: {
+            damage: 3
+        },
+        multiplicative_stats: {
+            attack_speed: 0.85 + 0.05 * Math.trunc(favour / 6 * Math.random()),
+            damage: 1.2,
+        },
+        type: Equipment_Type.WEAPON,
+        image: diamond_sword_image,
+        id: id_counter++,
+        display_name: "Diamond Sword",
+        action: melee_attack(),
+        name: "diamond_sword",
+    }
+}
+
+/** @type {Create_Equipment} */
+const emerald_sword_equipment = (favour = 0) => {
+    return {
+        flat_stats: {
+            damage: 3
+        },
+        multiplicative_stats: {
+            attack_speed: 0.85 + 0.05 * Math.trunc(favour / 6 * Math.random()),
+            damage: 1.2,
+        },
+        type: Equipment_Type.WEAPON,
+        image: emerald_sword_image,
+        id: id_counter++,
+        display_name: "Emerald Sword",
+        action: melee_attack(),
+        name: "emerald_sword",
+    }
+}
+
+/** @type {Create_Equipment} */
+const ruby_sword_equipment = (favour = 0) => {
+    return {
+        flat_stats: {
+            damage: 3
+        },
+        multiplicative_stats: {
+            attack_speed: 0.85 + 0.05 * Math.trunc(favour / 6 * Math.random()),
+            damage: 1.2,
+        },
+        type: Equipment_Type.WEAPON,
+        image: ruby_sword_image,
+        id: id_counter++,
+        display_name: "Ruby Sword",
+        action: melee_attack(),
+        name: "ruby_sword",
+    }
+}
+
+/** @type {Create_Equipment} */
+const gold_sword_equipment = (favour = 0) => {
+    return {
+        flat_stats: {
+            damage: 3
+        },
+        multiplicative_stats: {
+            attack_speed: 0.85 + 0.05 * Math.trunc(favour / 6 * Math.random()),
+            damage: 1.2,
+        },
+        type: Equipment_Type.WEAPON,
+        image: gold_sword_image,
+        id: id_counter++,
+        display_name: "Gold Sword",
+        action: melee_attack(),
+        name: "gold_sword",
     }
 }
 
@@ -1194,8 +1350,8 @@ const red_melee_entity = (x, y, protecting) => {
         entity_type: 'ENEMY',
         base_stats: {
             attack_speed: 1,
-            max_hp: 10,
-            movement_speed: get_random_int(2, 8),
+            max_hp: 50,
+            movement_speed: get_random_int(3, 7),
         },
         attack_timer: ticks_per_second,
         enemy_type: Enemy_Type.RED_MELEE,
@@ -1237,8 +1393,8 @@ const red_bow_entity = (x, y) => {
         entity_type: 'ENEMY',
         base_stats: {
             attack_speed: 1,
-            max_hp: 7,
-            movement_speed: get_random_int(4, 8),
+            max_hp: 25,
+            movement_speed: get_random_int(4, 7),
         },
         attack_timer: ticks_per_second,
         enemy_type: Enemy_Type.RED_BOW,
@@ -1273,9 +1429,9 @@ const red_mage_entity = (x, y) => {
         entity_type: 'ENEMY',
         base_stats: {
             attack_speed: 1,
-            max_hp: 7,
-            movement_speed: get_random_int(4, 8),
-            max_mana: 20,
+            max_hp: 25,
+            movement_speed: get_random_int(3, 6),
+            max_mana: 100,
         },
         attack_timer: ticks_per_second,
         enemy_type: Enemy_Type.RED_MAGE,
@@ -1615,9 +1771,17 @@ const loot_tables = {
     standard_chest: [
         [test_amulet_equipment, 1],
         [test_bow_equipment, 1],
-        [test_chestplate_equipment, 1],
+        [test_chestplate_equipment, 0.2],
+        [ruby_chestplate_equipment, 0.2],
+        [diamond_chestplate_equipment, 0.2],
+        [gold_chestplate_equipment, 0.2],
+        [emerald_chestplate_equipment, 0.2],
         [test_helmet_equipment, 1],
-        [test_sword_equipment, 1],
+        [test_sword_equipment, 0.2],
+        [diamond_sword_equipment, 0.2],
+        [emerald_sword_equipment, 0.2],
+        [ruby_sword_equipment, 0.2],
+        [gold_sword_equipment, 0.2]
     ],
 };
 
@@ -1655,7 +1819,7 @@ function table_sum(table) {
 function roll_for_table(loot_table, table_sum) {
     let increment = 0;
     let result;
-    const rolled_number = Math.floor(Math.random() * table_sum);
+    const rolled_number = Math.random() * table_sum;
     for (let i = 0; i < loot_table.length; i++)
     {
         const entry = loot_table[i];
@@ -1816,7 +1980,7 @@ mark_structure_cells(castle_structure, castle_pos[0], castle_pos[1], 0);
 
     /** @type {Array<Entity>} */
     const start_entities = [
-        red_knight_entity(20, 20),
+        // red_knight_entity(20, 20),
         /* red_melee_entity(30, 30),
         red_melee_entity(40, 40),
         red_bow_entity(30, 40),
@@ -1967,10 +2131,10 @@ function add_player(player) {
         },
         entity_type: 'PLAYER',
         base_stats: {
-            attack_speed: 0.7,
-            max_hp: 30,
+            attack_speed: 1,
+            max_hp: 100,
             movement_speed: 5,
-            max_mana: 20,
+            max_mana: 100,
         },
         attack_timer: ticks_per_second,
         on_kill: [(combat_context) => {
@@ -2047,7 +2211,7 @@ function damage_entity(combat_context) {
 
     if (target_entity.stats.armor)
     {
-        const armor_mult = 1 - (target_entity.stats.armor) / (target_entity.stats.armor + 10);
+        const armor_mult = 1 - (target_entity.stats.armor) / (target_entity.stats.armor + 100);
         resulting_amount *= armor_mult;
     }
 
@@ -3118,9 +3282,20 @@ function draw_equipped_items(entity, x, y, zoom) {
     }
 
     if (images.has(chestplate_image)) ctx.drawImage(chestplate_image, x, y, 32 * zoom, 32 * zoom);
+    if (images.has(ruby_chestplate_image)) ctx.drawImage(ruby_chestplate_image, x, y, 32 * zoom, 32 * zoom);
+    if (images.has(emerald_chestplate_image)) ctx.drawImage(emerald_chestplate_image, x, y, 32 * zoom, 32 * zoom);
+    if (images.has(gold_chestplate_image)) ctx.drawImage(gold_chestplate_image, x, y, 32 * zoom, 32 * zoom);
+    if (images.has(diamond_chestplate_image)) ctx.drawImage(diamond_chestplate_image, x, y, 32 * zoom, 32 * zoom);
+
     if (images.has(amulet_image)) ctx.drawImage(amulet_image, 0, 2, 16, 14, x + 8 * zoom, y + 4 * zoom, 16 * zoom, 14 * zoom);
     if (images.has(helmet_image)) ctx.drawImage(helmet_image, x, y - 32 * zoom + 1, 32 * zoom, 32 * zoom);
+
     if (images.has(sword_image)) ctx.drawImage(sword_image, x - zoom * 0, y, 32 * zoom, 32 * zoom);
+    if (images.has(ruby_sword_image)) ctx.drawImage(ruby_sword_image, x - zoom * 0, y, 32 * zoom, 32 * zoom);
+    if (images.has(emerald_sword_image)) ctx.drawImage(emerald_sword_image, x - zoom * 0, y, 32 * zoom, 32 * zoom);
+    if (images.has(gold_sword_image)) ctx.drawImage(gold_sword_image, x - zoom * 0, y, 32 * zoom, 32 * zoom);
+    if (images.has(diamond_sword_image)) ctx.drawImage(diamond_sword_image, x - zoom * 0, y, 32 * zoom, 32 * zoom);
+
     if (images.has(bow_image)) ctx.drawImage(bow_image, x, y, 32 * zoom, 32 * zoom);
     //ctx.drawImage(bow_image, x, y, 32 * zoom, 32 * zoom);
 

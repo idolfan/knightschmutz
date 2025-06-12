@@ -12,5 +12,21 @@ Features: --------------------------------------
 - hover on enemies info hud element
 - test mode ( for game init, maybe with hotkey during loading)
 - Status Effects ( Freezing , wet -> rain?, ..)
+- "Base damage" ? vielleicht eher unterteilung ( melee, range, spell, ..)
 
 - WINDOWS + V
+
+---------------------------------
+- Actual plan for stats ( balancing )
+
+
+Stat Balancing:
+Idee 1:
+- Spieler:
+  - HP: 100 - 1000 ( ohne Multiplikatoren)
+- "normaler" Gegner:
+  - HP: 0.5*
+- tanky Gegner:
+  - HP: 2*
+- squishy Gegner:
+  - HP: 0.2* 
