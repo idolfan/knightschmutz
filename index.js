@@ -60,6 +60,8 @@ const info_small_image = new Image();
 info_small_image.src = './images/info_small.png';
 const freeze_image = new Image();
 freeze_image.src = './images/freeze_visual.png';
+const red_ghost_image = new Image();
+red_ghost_image.src = './images/red_ghost.png';
 
 //#endregion -----------------------------------------------------------------------
 //#region ----------------------- Constants ----------------------------------------
@@ -109,6 +111,7 @@ const Enemy_Type = {
     RED_MELEE: 'RED_MELEE',
     RED_BOW: 'RED_BOW',
     RED_MAGE: 'RED_MAGE',
+    RED_KNIGHT: 'RED_KNIGHT',
 }
 
 /**
@@ -260,7 +263,7 @@ const action_slots_count = 9
 
 const log_requirements = false;
 
-/** 
+/**
  * @returns Which requirement failed
  * @type {(context: Context, action: Action) => Requirement} */
 function take_action(context, action) {
@@ -1130,6 +1133,57 @@ function close_inventory(inventory) {
 //#endregion -----------------------------------------------------------------------
 //#region -------------------- Entity definitions ----------------------------------
 
+
+/** @type {Create_Entity} */
+const red_knight_entity = (x, y, protecting) => {
+    const melee_attack_instance = melee_attack();
+    const sword = test_sword_equipment();
+    return {
+        display_name: "Mean Red Knight",
+        x: x,
+        y: y,
+        entity_type: 'ENEMY',
+        base_stats: {
+            attack_speed: 1,
+            max_hp: 20,
+            movement_speed: get_random_int(4, 6),
+        },
+        attack_timer: ticks_per_second,
+        enemy_type: Enemy_Type.RED_KNIGHT,
+        basic_attack: melee_attack_instance,
+        weapon: sword,
+        phase: protecting ? Phase.PROTECTING : Phase.WANDERING,
+        phase_states: {
+            chasing: {
+                action: melee_attack_instance,
+                aggro_range: 8,
+                lose_range: 12,
+            },
+            wandering: {
+                range: 4
+            },
+            protecting: {
+                max_distance: 10,
+                range: 10,
+            }
+
+        },
+        equipped_items: {
+            equipments: [
+                test_chestplate_equipment(0),
+                test_helmet_equipment(0),
+                sword,
+            ],
+            type: Inventory_Type.EQUIPPED,
+        },
+        on_death: [
+            (combat_context) => {
+                spend_mana(combat_context.source_entity, -5);
+            }
+        ]
+    }
+}
+
 /** @type {Create_Entity} */
 const red_melee_entity = (x, y, protecting) => {
     const melee_attack_instance = melee_attack();
@@ -1162,6 +1216,13 @@ const red_melee_entity = (x, y, protecting) => {
                 range: 10,
             }
 
+        },
+        equipped_items: {
+            equipments: [
+                test_chestplate_equipment(0),
+                test_helmet_equipment(0),
+            ],
+            type: Inventory_Type.EQUIPPED,
         }
     }
 }
@@ -1343,7 +1404,15 @@ const structures = {
                 fill_cells([x, i - margin], [x + margin, i], Cell_Type.COBBLE_WALL);
             }
 
-            place_cells(this.entrance_cells, x - this.entrance_cells[0].length / 2 + this.width / 2, y + this.height - this.entrance_cells.length);
+            const entrance_x = x - this.entrance_cells[0].length / 2 + this.width / 2;
+            const entrance_y = y + this.height - this.entrance_cells.length;
+            const entrance_enemies = [
+                red_knight_entity(x, y, true),
+                red_knight_entity(x, y, true),
+            ]
+
+            place_cells(this.entrance_cells, entrance_x, entrance_y);
+            place_other_cells(replace_with_entities(this.entrance_other_cells(), entrance_enemies), entrance_x, entrance_y);
 
         },
         entrance_cells: [
@@ -1355,6 +1424,17 @@ const structures = {
             [4, 4, 0, 0, 0, 0, 4, 4],
             [4, 4, 0, 0, 0, 0, 4, 4],
             [u, 0, 0, 0, 0, 0, 0, u],
+        ],
+        entrance_other_cells: () => [
+            [0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 3, 0, 0, 3, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0],
+
         ],
         horizontal_wall_cells: [
             [4, 4, 4, 4, 4, 4, 4],
@@ -1461,6 +1541,8 @@ function replace_with_entities(cells, entities) {
     }
     if (e_index > entities.length)
         throw new Error("Bad replace_with_entities usage. Cells had more entities than entities", cells, entities);
+
+    return cells;
 }
 
 /** @type {(cells: Cells, x: number, y: number)} */
@@ -1733,8 +1815,8 @@ mark_structure_cells(castle_structure, castle_pos[0], castle_pos[1], 0);
 
 
     /** @type {Array<Entity>} */
-    const start_entites = [
-        red_melee_entity(20, 20),
+    const start_entities = [
+        red_knight_entity(20, 20),
         /* red_melee_entity(30, 30),
         red_melee_entity(40, 40),
         red_bow_entity(30, 40),
@@ -1746,9 +1828,9 @@ mark_structure_cells(castle_structure, castle_pos[0], castle_pos[1], 0);
 
     ]
 
-    for (let i = 0; i < start_entites.length; i++)
+    for (let i = 0; i < start_entities.length; i++)
     {
-        const entity = start_entites[i];
+        const entity = start_entities[i];
         add_entity(entity);
     }
 }
@@ -1859,6 +1941,9 @@ function add_entity(entity) {
         entity.phase_states.protecting.x = entity.x;
         entity.phase_states.protecting.y = entity.y;
     }
+
+    if (entity.inventory && !entity.inventory.entity) entity.inventory.entity = entity;
+    if (entity.equipped_items && !entity.equipped_items.entity) entity.equipped_items.entity = entity;
 
     if (!entity.status_effects) entity.status_effects = {};
 
@@ -2285,7 +2370,7 @@ function draw(time) {
     const left_most_cell = Math.max(0, Math.floor((camera_origin[0] * zoom - canvas.width / 2) / cell_size));
     const right_most_cell = Math.min(world_area_size - 1, Math.floor((camera_origin[0] * zoom + canvas.width / 2) / cell_size + 1));
     const up_most_cell = Math.max(0, Math.floor((camera_origin[1] * zoom - canvas.height / 2) / cell_size));
-    const down_most_cell = Math.min(world_area_size - 1, Math.floor((camera_origin[1] * zoom + canvas.height / 2) / cell_size + 1));
+    const down_most_cell = Math.min(world_area_size - 1, Math.floor((camera_origin[1] * zoom + canvas.height / 2) / cell_size + 1 + 1));
 
     for (let i = right_most_cell; i >= left_most_cell; i--)
     {
@@ -2459,18 +2544,46 @@ function draw(time) {
                 ctx.closePath();
                 ctx.fill();
                 ctx.stroke();
+            } else if (entity.enemy_type == Enemy_Type.RED_KNIGHT)
+            {
+                ctx.drawImage(red_ghost_image, x, y, 32 * zoom, 32 * zoom);
             }
 
             const damage_percent = 1 - Math.max(0, Math.min(1, entity.stats.current_hp / entity.stats.max_hp));
-            ctx.fillStyle = "rgb(0,0,0,0.7)";
-            ctx.fillRect(x, y, entity_size, (entity_size) * damage_percent);
-
+            if (entity.enemy_type != Enemy_Type.RED_KNIGHT)
+            {
+                ctx.fillStyle = "rgb(0,0,0,0.7)";
+                ctx.fillRect(x, y, entity_size, (entity_size) * damage_percent);
+            }
             const attack_percent = Math.min(1, entity.stats.attack_speed * entity.attack_timer / ticks_per_second);
+
             ctx.strokeStyle = 'yellow';
+
+            const bars_width = 4;
+            ctx.lineWidth = bars_width;
+
             ctx.beginPath();
             ctx.moveTo(x, entity.visual_y + cell_size - cell_margin);
             ctx.lineTo(x + (entity_size) * attack_percent, entity.visual_y + cell_size - cell_margin);
             ctx.stroke();
+
+            ctx.strokeStyle = 'red';
+            ctx.beginPath();
+            ctx.moveTo(x, entity.visual_y + cell_size - cell_margin + bars_width + 1);
+            ctx.lineTo(x + (entity_size) * (1 - damage_percent), entity.visual_y + cell_size - cell_margin + bars_width + 1);
+            ctx.stroke();
+
+            if (entity.stats.max_mana)
+            {
+                const mana_percent = Math.min(1, entity.stats.current_mana / entity.stats.max_mana);
+                ctx.strokeStyle = 'blue';
+                ctx.beginPath();
+                ctx.moveTo(x, entity.visual_y + cell_size - cell_margin + (bars_width + 1) * 2);
+                ctx.lineTo(x + (entity_size) * (1 - damage_percent), entity.visual_y + cell_size - cell_margin + (bars_width + 1) * 2);
+                ctx.stroke();
+            }
+
+            draw_equipped_items(entity, x, y, zoom);
 
         }
 
@@ -3427,7 +3540,7 @@ window.addEventListener('mouseup', (event) => {
     event.preventDefault();
     switch (event.button)
     {
-        case 0: // Left mouse button            
+        case 0: // Left mouse button
             keys_pressed.left_mouse_button = false;
             break;
         case 1: // Middle mouse button (wheel)
@@ -3619,7 +3732,6 @@ function tick() {
             const entity = entities[j];
             if (distance_2(entity.x, entity.y, cloud.x, cloud.y) > cloud.radius_2 * cloud.radius_2) continue;
 
-            if (entity == player_entity) console.log("in rain");
             const old_wetness = entity.status_effects.wet || 0;
             entity.status_effects.wet = old_wetness + 1 / ticks_per_second;
         }
@@ -3748,6 +3860,12 @@ function process_enemy_ai() {
                     entity.path.path_steps = [];
                 }
 
+            } else
+            {
+                process_standard_chasing(entity, entity.path?.blocked_by);
+
+                if (distance_to_closest_player > chase_lose_range)
+                    entity.phase = Phase.WANDERING;
             }
 
         }
