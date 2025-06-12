@@ -69,6 +69,7 @@ const Cell_Type = Object.freeze({
     WALL: 1,
     CHEST: 2,
     ENTITY: 3,
+    COBBLE_WALL: 4
 });
 
 const Stat_Display_Names = Object.freeze({
@@ -452,7 +453,8 @@ const hammer_spell = (favour) => {
         effect_functions: [cost_mana,
             (context, action) => {
                 const target_cell = context.target_cell;
-                area_board[target_cell[0]][target_cell[1]] = Cell_Type.EMPTY;
+                if (area_board[target_cell[0]][target_cell[1]] == Cell_Type.WALL)
+                    area_board[target_cell[0]][target_cell[1]] = Cell_Type.EMPTY;
                 action.cooldown_date = tick_counter;
             }],
         cooldown: ticks_per_second * 4,
@@ -917,7 +919,6 @@ function init_slots(inventory_zone, inventory) {
 
                     if (equipped_type && equipment.type == Equipment_Type.WEAPON)
                     {
-                        console.log('Basic attack set');
                         inventory.entity.basic_attack = equipment.action;
                         inventory.entity.weapon = equipment;
                     }
@@ -1299,70 +1300,70 @@ const structures = {
             const tower_in_between = 6;
             // North wall
 
-            fill_cells([x + margin, y + margin], [x + this.width - margin, y + margin + wall_thickness], 1);
+            fill_cells([x + margin, y + margin], [x + this.width - margin, y + margin + wall_thickness], Cell_Type.COBBLE_WALL);
             for (let i = x; i < x + this.width / 2; i += margin + tower_in_between)
             {
-                fill_cells([i, y], [i + margin, y + margin], 1);
+                fill_cells([i, y], [i + margin, y + margin], Cell_Type.COBBLE_WALL);
             }
             for (let i = x + this.width; i > x + this.width / 2; i -= margin + tower_in_between)
             {
-                fill_cells([i - margin, y], [i, y + margin], 1);
+                fill_cells([i - margin, y], [i, y + margin], Cell_Type.COBBLE_WALL);
             }
 
             // South wall
-            fill_cells([x + margin, y + this.height - wall_thickness - margin], [x + this.width - margin, y + this.height - margin], 1);
+            fill_cells([x + margin, y + this.height - wall_thickness - margin], [x + this.width - margin, y + this.height - margin], Cell_Type.COBBLE_WALL);
             for (let i = x; i < x + this.width / 2; i += margin + tower_in_between)
             {
-                fill_cells([i, y + this.height - margin], [i + margin, y + this.height], 1);
+                fill_cells([i, y + this.height - margin], [i + margin, y + this.height], Cell_Type.COBBLE_WALL);
             }
             for (let i = x + this.width; i > x + this.width / 2; i -= margin + tower_in_between)
             {
-                fill_cells([i - margin, y + this.height - margin], [i, y + this.height], 1);
+                fill_cells([i - margin, y + this.height - margin], [i, y + this.height], Cell_Type.COBBLE_WALL);
             }
 
             // East wall
-            fill_cells([x + this.width - wall_thickness - margin, y + margin], [x + this.width - margin, y + this.height - margin], 1);
+            fill_cells([x + this.width - wall_thickness - margin, y + margin], [x + this.width - margin, y + this.height - margin], Cell_Type.COBBLE_WALL);
             for (let i = y; i < y + this.height / 2; i += margin + tower_in_between)
             {
-                fill_cells([x + this.width - margin, i], [x + this.width, i + margin], 1);
+                fill_cells([x + this.width - margin, i], [x + this.width, i + margin], Cell_Type.COBBLE_WALL);
             }
             for (let i = y + this.height; i > y + this.height / 2; i -= margin + tower_in_between)
             {
-                fill_cells([x + this.width - margin, i - margin], [x + this.width, i], 1);
+                fill_cells([x + this.width - margin, i - margin], [x + this.width, i], Cell_Type.COBBLE_WALL);
             }
 
             // West wall
-            fill_cells([x + margin, y + margin], [x + margin + wall_thickness, y + this.height - margin ], 1);
+            fill_cells([x + margin, y + margin], [x + margin + wall_thickness, y + this.height - margin], Cell_Type.COBBLE_WALL);
             for (let i = y; i < y + this.height / 2; i += margin + tower_in_between)
             {
-                fill_cells([x, i], [x + margin, i + margin], 1);
+                fill_cells([x, i], [x + margin, i + margin], Cell_Type.COBBLE_WALL);
             }
             for (let i = y + this.height; i > y + this.height / 2; i -= margin + tower_in_between)
             {
-                fill_cells([x, i - margin], [x + margin, i], 1);
+                fill_cells([x, i - margin], [x + margin, i], Cell_Type.COBBLE_WALL);
             }
 
             place_cells(this.entrance_cells, x - this.entrance_cells[0].length / 2 + this.width / 2, y + this.height - this.entrance_cells.length);
 
         },
         entrance_cells: [
-            [1, 1, 0, 0, 0, 0, 1, 1],
-            [1, 1, 0, 0, 0, 0, 1, 1],
-            [1, 1, 0, 0, 0, 0, 1, 1],
-            [1, 1, 0, 0, 0, 0, 1, 1],
-            [1, 1, 0, 0, 0, 0, 1, 1],
-            [1, 1, 0, 0, 0, 0, 1, 1],
-            [1, 1, 0, 0, 0, 0, 1, 1],
+            [4, 4, 0, 0, 0, 0, 4, 4],
+            [4, 4, 0, 0, 0, 0, 4, 4],
+            [4, 4, 0, 0, 0, 0, 4, 4],
+            [4, 4, 0, 0, 0, 0, 4, 4],
+            [4, 4, 0, 0, 0, 0, 4, 4],
+            [4, 4, 0, 0, 0, 0, 4, 4],
+            [4, 4, 0, 0, 0, 0, 4, 4],
             [u, 0, 0, 0, 0, 0, 0, u],
         ],
         horizontal_wall_cells: [
-            [1, 1, 1, 1, 1, 1, 1],
-            [1, 1, 1, 1, 1, 1, 1],
-            [1, 1, 1, 1, 1, 1, 1],
+            [4, 4, 4, 4, 4, 4, 4],
+            [4, 4, 4, 4, 4, 4, 4],
+            [4, 4, 4, 4, 4, 4, 4],
         ],
         small_quad_cells: [
-            [1, 1],
-            [1, 1]
+            [4, 4],
+            [4, 4]
         ],
         width: 50,
         height: 50,
@@ -1510,12 +1511,12 @@ function place_other_cells(cells, x, y) {
             const value = cells[i][j];
             if (value.slot_count)
             {
-                area_board[i + x][j + y] = Cell_Type.CHEST;
-                chest_inventories.set(i + " " + j, value);
+                area_board[j + x][i + y] = Cell_Type.CHEST;
+                chest_inventories.set((j + x) + " " + (i + y), value);
             } else if (value.enemy_type != null)
             {
-                value.x = i + x;
-                value.y = j + y;
+                value.x = j + x;
+                value.y = i + y;
                 add_entity(value);
             }
         }
@@ -1642,7 +1643,7 @@ const structure_cells = Array.from({ length: world_area_size }, () => Array(worl
 
 // Castle
 const castle_structure = structures.castle;
-const castle_pos = [25,25];
+const castle_pos = [5, 5];
 castle_structure.create(castle_pos[0], castle_pos[1], 0);
 mark_structure_cells(castle_structure, castle_pos[0], castle_pos[1], 0);
 
@@ -1808,11 +1809,10 @@ function calculate_entity_stats(entity) {
         }
     }
 
-    if (entity.status_effects && entity.status_effects.freezing != 0)
+    if (entity.status_effects.freezing != null && entity.status_effects.freezing !== 0)
     {
         const speed_mult = 10 / Math.max(10, (10 + entity.status_effects.freezing));
         entity.stats.movement_speed *= speed_mult;
-        console.log("f");
     }
 
     if (entity?.stats?.current_hp) entity.stats.current_hp = entity.stats.max_hp * hp_percent;
@@ -1822,7 +1822,6 @@ function calculate_entity_stats(entity) {
     if (old_movement_speed != null && old_movement_speed != entity.stats.movement_speed && entity.path)
     {
         entity.path.visual_progress *= entity.stats.movement_speed / old_movement_speed;
-        console.log("changed v");
     }
 }
 
@@ -1860,6 +1859,8 @@ function add_entity(entity) {
         entity.phase_states.protecting.x = entity.x;
         entity.phase_states.protecting.y = entity.y;
     }
+
+    if (!entity.status_effects) entity.status_effects = {};
 
     calculate_entity_stats(entity);
     return entity;
@@ -1997,8 +1998,6 @@ function affect_entity(combat_context) {
 
     if (combat_context.damage.status_effect)
     {
-        if (!target_entity.status_effects) target_entity.status_effects = {};
-
         const status_effect = combat_context.damage.status_effect;
         const old_value = target_entity.status_effects[status_effect] || 0;
         target_entity.status_effects[status_effect] = old_value + combat_context.damage.amount;
@@ -2113,10 +2112,10 @@ function entities_in_rect(p1, p2) {
 function entities_inside(x, y, size) {
     const result = [];
     const r = (size - 1) / 2;
-    const x1 = Math.max(0, x - r);
-    const y1 = Math.max(0, y - r);
-    const x2 = Math.min(world_area_size - 1, x + r);
-    const y2 = Math.min(world_area_size - 1, y + r);
+    const x1 = Math.max(0, Math.floor(x - r));
+    const y1 = Math.max(0, Math.floor(y - r));
+    const x2 = Math.min(world_area_size - 1, Math.floor(x + r));
+    const y2 = Math.min(world_area_size - 1, Math.floor(y + r));
     for (let i = x1; i <= x2; i++)
     {
         for (let j = y1; j <= y2; j++)
@@ -2129,7 +2128,6 @@ function entities_inside(x, y, size) {
     return result;
 }
 
-
 //#endregion -----------------------------------------------------------------------
 //#region ------------------------- Render -----------------------------------------
 
@@ -2139,6 +2137,7 @@ let zoom = cell_size / 40.0;
 const camera_origin = /* [20, 20] */[canvas.width / 2, canvas.height / 2];
 const camera_speed = 7;
 
+/** @type {Cloud[]} */
 const clouds = [
     {
         x: 26, y: 15, radius_1: 4, radius_2: 12, offset_x: 0, offset_y: 0, color_1: "rgb(0,0,0,0.5)", color_2: "rgb(0,0,0,0.0)", speed: [0.2, 0.1],
@@ -2275,7 +2274,8 @@ function draw(time) {
 
 
             }
-        } else if(entity.path && entity.path.path_steps.length == 0) {
+        } else if (entity.path && entity.path.path_steps.length == 0)
+        {
             entity.path.visual_progress = 0;
             entity.path.progress = 0;
         }
@@ -2296,8 +2296,6 @@ function draw(time) {
                 let color = 'rgb(64, 64, 64, 1)'
                 ctx.fillStyle = 'black';
                 ctx.fillRect(i * cell_size, j * cell_size + cell_size / 2, cell_size, 0.5 * cell_size);
-                ctx.fillStyle = color;
-                ctx.fillRect(i * cell_size, (j - 0.5) * cell_size, cell_size, cell_size);
             } else if (area_board[i][j] === Cell_Type.CHEST)
             {
                 ctx.drawImage(chest_image, i * cell_size, j * cell_size, cell_size, cell_size);
@@ -2305,6 +2303,22 @@ function draw(time) {
             {
                 ctx.fillStyle = 'rgb(0, 128, 40, 0.2)'
                 ctx.fillRect(i * cell_size + grid_width / 2, j * cell_size + grid_width / 2, cell_size - grid_width, cell_size - grid_width);
+            }
+            else if (area_board[i][j] === Cell_Type.COBBLE_WALL)
+            {
+                const gap = 2 * cell_size / 40;
+                let color = 'rgb(56, 56, 56, 1)'
+                ctx.fillStyle = color;
+                ctx.fillRect(i * cell_size, j * cell_size, cell_size, cell_size); // Background
+                const gap_color = 'black';
+                ctx.fillStyle = gap_color;
+                ctx.fillRect(i * cell_size, j * cell_size, cell_size, gap / 2); // Top gap
+                ctx.fillRect(i * cell_size, j * cell_size + cell_size - gap / 2, cell_size, gap / 2); // Bottom gap
+                ctx.fillRect(i * cell_size, j * cell_size + cell_size / 2 - gap / 2, cell_size, gap); // Middle horizontal Gap
+                ctx.fillRect(i * cell_size + cell_size / 2 - gap / 2, j * cell_size, gap, cell_size / 2); // Middle vertical Gap
+                ctx.fillRect(i * cell_size, j * cell_size + cell_size / 2, gap / 2, cell_size / 2); // Left vertical Gap
+                ctx.fillRect(i * cell_size + cell_size - gap / 2, j * cell_size + cell_size / 2, gap / 2, cell_size / 2); // Right vertical Gap
+
             }
         }
     }
@@ -2462,6 +2476,39 @@ function draw(time) {
 
     }
 
+    for (let i = right_most_cell; i >= left_most_cell; i--)
+    {
+        for (let j = up_most_cell; j < down_most_cell; j++)
+        {
+            const alpha = entity_positions[i][j - 1] ? 0.98 : 1;
+            if (area_board[i][j] === Cell_Type.WALL)
+            {
+                let color = `rgb(64, 64, 64, ${alpha})`;
+                ctx.fillStyle = color;
+                ctx.fillRect(i * cell_size, (j - 0.5) * cell_size, cell_size, cell_size);
+            } else if (area_board[i][j] === Cell_Type.CHEST)
+            {
+
+            } else if (area_board[i][j] === Cell_Type.EMPTY)
+            {
+
+            }
+            else if (area_board[i][j] === Cell_Type.COBBLE_WALL)
+            {
+                const gap = 2 * cell_size / 40;
+                if (j > 0 && area_board[i][j - 1] !== Cell_Type.COBBLE_WALL)
+                {
+                    ctx.fillStyle = `rgb(68, 68, 68, ${alpha})`;
+                    ctx.fillRect(i * cell_size, j * cell_size - cell_size / 2, cell_size, cell_size);
+                    ctx.fillStyle = `rgb(40, 40, 40, ${alpha})`;
+                    ctx.fillRect(i * cell_size, j * cell_size - cell_size / 2, gap / 2, cell_size); // Left vertical Gap
+                    ctx.fillRect(i * cell_size + cell_size - gap / 2, j * cell_size - cell_size / 2, gap / 2, cell_size); // Right vertical Gap
+                    ctx.fillRect(i * cell_size, j * cell_size - cell_size / 2, cell_size, gap / 2); // Top gap
+                    ctx.fillRect(i * cell_size, j * cell_size + cell_size / 2 - gap / 2, cell_size, gap / 2); // Bottom gap
+                }
+            }
+        }
+    }
 
     if (time_since_entity_hovered >= 15) hovered_entity = null;
 
@@ -3562,6 +3609,22 @@ function tick() {
         entity.attack_timer += 1;
     }
 
+    // Rain wetness
+    for (let i = 0; i < clouds.length; i++)
+    {
+        const cloud = clouds[i];
+        const entities = entities_inside(cloud.x, cloud.y, cloud.radius_2 * 2 - 2);
+        for (let j = 0; j < entities.length; j++)
+        {
+            const entity = entities[j];
+            if (distance_2(entity.x, entity.y, cloud.x, cloud.y) > cloud.radius_2 * cloud.radius_2) continue;
+
+            if (entity == player_entity) console.log("in rain");
+            const old_wetness = entity.status_effects.wet || 0;
+            entity.status_effects.wet = old_wetness + 1 / ticks_per_second;
+        }
+    }
+
     process_player();
     process_enemy_ai();
 
@@ -3742,7 +3805,7 @@ function process_standard_protecting(entity) {
 
     if (is_at_bay) return;
 
-    if (entity.phase_states.new_phase_change || entity.path.blocked_by || entity.path.path_steps.length == 0)
+    if (true)
     {
         const path_steps = calculate_path_positions([entity.x, entity.y], [protecting.x, protecting.y], !!entity.path?.blocked_by);
         if (path_steps != null) change_path(entity, path_steps);
@@ -3920,5 +3983,10 @@ function entity_distance(entity1, entity2) {
     const distance_x = entity2.x - entity1.x;
     const distance_y = entity2.y - entity1.y;
     return Math.sqrt(distance_x * distance_x + distance_y * distance_y);
+}
+
+/** @type {(x1: number, y1: number, x2: number, y2: number) => number} */
+function distance_2(x1, y1, x2, y2) {
+    return (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
 }
 //#endregion -----------------------------------------------------------------------
