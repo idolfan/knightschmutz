@@ -324,4 +324,5 @@ const Entity_Type = {
  * @property {Cells} other_cells - for Entities and chests
  * @property {number} width - in cells
  * @property {number} height - in cells
+ * @property {number} weight - for world generation
  */

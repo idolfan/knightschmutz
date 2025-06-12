@@ -1287,6 +1287,86 @@ const structures = {
         ],
         width: 6,
         height: 5,
+        weight: 1,
+    },
+    castle: {
+        create: function (x, y, angle) {
+            const vertical_wall_cells = rotated_array2(this.horizontal_wall_cells, 90);
+            //place_cells(rotated_array2(this.entrance_cells, 90), x, y /* + this.height - this.entrance_cells.height */);
+
+            const margin = 2;
+            const wall_thickness = 3;
+            const tower_in_between = 6;
+            // North wall
+
+            fill_cells([x + margin, y + margin], [x + this.width - margin, y + margin + wall_thickness], 1);
+            for (let i = x; i < x + this.width / 2; i += margin + tower_in_between)
+            {
+                fill_cells([i, y], [i + margin, y + margin], 1);
+            }
+            for (let i = x + this.width; i > x + this.width / 2; i -= margin + tower_in_between)
+            {
+                fill_cells([i - margin, y], [i, y + margin], 1);
+            }
+
+            // South wall
+            fill_cells([x + margin, y + this.height - wall_thickness - margin], [x + this.width - margin, y + this.height - margin], 1);
+            for (let i = x; i < x + this.width / 2; i += margin + tower_in_between)
+            {
+                fill_cells([i, y + this.height - margin], [i + margin, y + this.height], 1);
+            }
+            for (let i = x + this.width; i > x + this.width / 2; i -= margin + tower_in_between)
+            {
+                fill_cells([i - margin, y + this.height - margin], [i, y + this.height], 1);
+            }
+
+            // East wall
+            fill_cells([x + this.width - wall_thickness - margin, y + margin], [x + this.width - margin, y + this.height - margin], 1);
+            for (let i = y; i < y + this.height / 2; i += margin + tower_in_between)
+            {
+                fill_cells([x + this.width - margin, i], [x + this.width, i + margin], 1);
+            }
+            for (let i = y + this.height; i > y + this.height / 2; i -= margin + tower_in_between)
+            {
+                fill_cells([x + this.width - margin, i - margin], [x + this.width, i], 1);
+            }
+
+            // West wall
+            fill_cells([x + margin, y + margin], [x + margin + wall_thickness, y + this.height - margin ], 1);
+            for (let i = y; i < y + this.height / 2; i += margin + tower_in_between)
+            {
+                fill_cells([x, i], [x + margin, i + margin], 1);
+            }
+            for (let i = y + this.height; i > y + this.height / 2; i -= margin + tower_in_between)
+            {
+                fill_cells([x, i - margin], [x + margin, i], 1);
+            }
+
+            place_cells(this.entrance_cells, x - this.entrance_cells[0].length / 2 + this.width / 2, y + this.height - this.entrance_cells.length);
+
+        },
+        entrance_cells: [
+            [1, 1, 0, 0, 0, 0, 1, 1],
+            [1, 1, 0, 0, 0, 0, 1, 1],
+            [1, 1, 0, 0, 0, 0, 1, 1],
+            [1, 1, 0, 0, 0, 0, 1, 1],
+            [1, 1, 0, 0, 0, 0, 1, 1],
+            [1, 1, 0, 0, 0, 0, 1, 1],
+            [1, 1, 0, 0, 0, 0, 1, 1],
+            [u, 0, 0, 0, 0, 0, 0, u],
+        ],
+        horizontal_wall_cells: [
+            [1, 1, 1, 1, 1, 1, 1],
+            [1, 1, 1, 1, 1, 1, 1],
+            [1, 1, 1, 1, 1, 1, 1],
+        ],
+        small_quad_cells: [
+            [1, 1],
+            [1, 1]
+        ],
+        width: 50,
+        height: 50,
+        weight: 0,
     }
 }
 
@@ -1382,7 +1462,7 @@ function replace_with_entities(cells, entities) {
         throw new Error("Bad replace_with_entities usage. Cells had more entities than entities", cells, entities);
 }
 
-/** @type {(cells: Cells)} */
+/** @type {(cells: Cells, x: number, y: number)} */
 function place_cells(cells, x, y) {
     for (let i = 0; i < cells.length; i++)
     {
@@ -1392,23 +1472,35 @@ function place_cells(cells, x, y) {
             const value = cells[i][j];
             if (value.slot_count)
             {
-                area_board[i + x][j + y] = Cell_Type.CHEST;
-                chest_inventories.set(i + " " + j, value);
+                area_board[j + x][i + y] = Cell_Type.CHEST;
+                chest_inventories.set((j + x) + " " + (i + y), value);
             } else if (value.enemy_type != null)
             {
-                value.x = i + x;
-                value.y = j + y;
+                value.x = j + x;
+                value.y = i + y;
                 add_entity(value);
             }
             else if (value == -1)
             {
 
             } else
-                area_board[i + x][j + y] = value;
+                area_board[j + x][i + y] = value;
         }
     }
 }
 
+/** @type {(p1: [x,y], p2:[x,y], value: any)} */
+function fill_cells(p1, p2, value) {
+    for (let i = p1[0]; i < p2[0]; i++)
+    {
+        for (let j = p1[1]; j < p2[1]; j++)
+        {
+            area_board[i][j] = value;
+        }
+    }
+}
+
+/** @type {(cells: Cells, x: number, y: number)} */
 function place_other_cells(cells, x, y) {
     for (let i = 0; i < cells.length; i++)
     {
@@ -1504,9 +1596,11 @@ function add_equipments_from_table(equipments, table, sum, count, favour) {
     return equipments;
 }
 
+const do_world_generation = true;
+
 // World generation
 area_board = Array.from({ length: world_area_size }, () => Array(world_area_size).fill(Cell_Type.EMPTY));
-for (let i = 0; i < world_area_size; i++)
+for (let i = 0; i < (do_world_generation ? world_area_size : 0); i++)
 {
     for (let j = 0; j < world_area_size; j++)
     {
@@ -1544,22 +1638,43 @@ for (let i = 1; i < world_area_size - 1; i++)
     }
 }
 
+const structure_cells = Array.from({ length: world_area_size }, () => Array(world_area_size).fill(0));
+
+// Castle
+const castle_structure = structures.castle;
+const castle_pos = [25,25];
+castle_structure.create(castle_pos[0], castle_pos[1], 0);
+mark_structure_cells(castle_structure, castle_pos[0], castle_pos[1], 0);
+
 
 { // Structures
-    const structure_cells = Array.from({ length: world_area_size }, () => Array(world_area_size).fill(0));
 
     const structure_density = 12 / (100 * 100)
 
     const structure_atempts = Math.ceil(structure_density * world_area_size * world_area_size);
 
+    let structure_weight_sum = 0;
+
     /** @type {Array<Structure>} */
-    const structures_arr = Object.keys(structures).map((key) => structures[key]);
+    const structures_arr = Object.keys(structures).map((key) => {
+        structure_weight_sum += structures[key].weight || 0;
+        return structures[key];
+    }).filter((str) => str.weight != 0);
+
 
     let failed_structures = 0;
 
     for (let i = 0; i < structure_atempts; i++)
     {
-        const structure = structures_arr[Math.floor(Math.random() * structures_arr.length)];
+        const random = Math.random() * structure_weight_sum;
+        let sum = 0;
+        let j;
+        for (j = 0; j < structures_arr; j++)
+        {
+            sum += structures_arr[j].weight;
+            if (random < sum) break;
+        }
+        const structure = structures_arr[j];
 
         const angle = Math.floor(Math.random() * 4) * 90;
 
@@ -1637,6 +1752,20 @@ for (let i = 1; i < world_area_size - 1; i++)
     }
 }
 
+/** @type {(structure: Structure, x: number, y: number)} */
+function mark_structure_cells(structure, x, y, angle = 0) {
+    const width = (angle == 90 || angle == 270) ? structure.height : structure.width;
+    const height = (angle == 90 || angle == 270) ? structure.width : structure.height;
+
+    for (let j = x; j < x + width; j++)
+    {
+        for (let k = y; k < y + height; k++)
+        {
+            structure_cells[j][k] = 1;
+        }
+    }
+}
+
 //#endregion -----------------------------------------------------------------------
 //#region -------------------- Entity Management -----------------------------------
 /** @type {(entity: Entity)} */
@@ -1690,7 +1819,8 @@ function calculate_entity_stats(entity) {
 
     if (entity?.stats?.current_mana) entity.stats.current_mana = entity.stats.max_mana * mana_percent;
 
-    if(old_movement_speed != null && old_movement_speed != entity.stats.movement_speed && entity.path) {
+    if (old_movement_speed != null && old_movement_speed != entity.stats.movement_speed && entity.path)
+    {
         entity.path.visual_progress *= entity.stats.movement_speed / old_movement_speed;
         console.log("changed v");
     }
@@ -1867,7 +1997,7 @@ function affect_entity(combat_context) {
 
     if (combat_context.damage.status_effect)
     {
-        if(!target_entity.status_effects) target_entity.status_effects = {};
+        if (!target_entity.status_effects) target_entity.status_effects = {};
 
         const status_effect = combat_context.damage.status_effect;
         const old_value = target_entity.status_effects[status_effect] || 0;
@@ -2145,6 +2275,9 @@ function draw(time) {
 
 
             }
+        } else if(entity.path && entity.path.path_steps.length == 0) {
+            entity.path.visual_progress = 0;
+            entity.path.progress = 0;
         }
     }
 
@@ -2253,7 +2386,8 @@ function draw(time) {
         time_since_entity_hovered = 0;
     }
 
-    if(time_since_entity_hovered == 2 && hovered_entity){
+    if (time_since_entity_hovered == 2 && hovered_entity)
+    {
         console.log('Hovered entity:', hovered_entity);
     }
 
@@ -3378,7 +3512,8 @@ function tick() {
             continue;
         }
 
-        if (path.path_steps.length === 0){ 
+        if (path.path_steps.length === 0)
+        {
             entity.path.blocked_by = null;
             continue;
         }
@@ -3607,7 +3742,7 @@ function process_standard_protecting(entity) {
 
     if (is_at_bay) return;
 
-    if (entity.phase_states.new_phase_change || entity.path.blocked_by)
+    if (entity.phase_states.new_phase_change || entity.path.blocked_by || entity.path.path_steps.length == 0)
     {
         const path_steps = calculate_path_positions([entity.x, entity.y], [protecting.x, protecting.y], !!entity.path?.blocked_by);
         if (path_steps != null) change_path(entity, path_steps);
