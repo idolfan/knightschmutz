@@ -205,8 +205,8 @@ const Entity_Type = {
  * @property {number} duration - in ticks
  * @property {number} time - passed ticks of duration
  * @property {Entity} [entity]
- * @property {number} x
- * @property {number} y
+ * @property {number} x - pixels
+ * @property {number} y - pixels
  * @property {number} [peak_at] - percent visibility peak
  * @property {[x:number,y:number]} [destination]
  * @property {(effect: Visual_Effect)} [draw_callback]
