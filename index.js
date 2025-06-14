@@ -78,6 +78,10 @@ const ruby_chestplate_image = new Image();
 ruby_chestplate_image.src = './images/ruby_chestplate.png';
 const diamond_chestplate_image = new Image();
 diamond_chestplate_image.src = './images/diamond_chestplate.png';
+const axe_image = new Image();
+axe_image.src = './images/axe.png';
+const fire_rain_image = new Image();
+fire_rain_image.src = './images/fire_rain.png';
 
 //#endregion -----------------------------------------------------------------------
 //#region ----------------------- Constants ----------------------------------------
@@ -219,6 +223,7 @@ let inventory_zones = [];
 
 let tick_interval_id;
 
+let hp_base_entity = 100;
 
 //#endregion -----------------------------------------------------------------------
 //#region ---------------------- Requirements --------------------------------------
@@ -361,16 +366,20 @@ const melee_attack = (favour) => {
                     const direction_x = effect.destination[0] - effect.x;
                     const direction_y = effect.destination[1] - effect.y;
                     const distance = Math.sqrt(direction_x * direction_x + direction_y * direction_y);
-                    const remaining_time = effect.duration - effect.time;
-                    const x_bigger = direction_x > direction_y;
-                    const x_swing = x_bigger ? Math.sign(direction_x) * cell_size : cell_size * effect.time / ticks_per_second * 4;
-                    const y_swing = x_bigger ? cell_size * effect.time / ticks_per_second * 4 : 0;
+                    const passed_time = effect.time / effect.duration;
+
+                    const angle = Math.atan2(direction_y, direction_x) + Math.PI / 4 - passed_time * Math.PI / 2
+
+                    const p2 = [Math.cos(angle), Math.sin(angle)];
+
+                    const p1 = [effect.x + cell_size / 2, effect.y + cell_size / 2];
+
                     ctx.beginPath();
                     ctx.strokeStyle = "rgb(200,200,200, 0.8)";
-                    ctx.lineWidth = 5;
-                    ctx.moveTo(effect.x + cell_size / 2, effect.y + cell_size / 2);
-                    ctx.lineTo(effect.x + direction_x + x_swing + cell_size / 2,
-                        effect.y + direction_y + y_swing + cell_size / 2);
+                    ctx.lineWidth = 6 * zoom;
+                    ctx.moveTo(p1[0], p1[1]);
+                    ctx.lineTo(p1[0] + p2[0] * (distance + cell_size / 4),
+                        p1[1] + p2[1] * (distance + cell_size / 4));
                     ctx.stroke();
                 },
                 tick_callback: () => { }
@@ -610,6 +619,173 @@ const freeze_spell = (favour) => {
         image: freeze_image,
         mana_cost: 10,
         range: 10,
+    }
+}
+
+/** @type {Create_Action} */
+const fire_rain_spell = (favour) => {
+    return {
+        name: "Fire Rain",
+        type: Action_Type.SPELL,
+        requirements: [in_cell_range_requirement, cooldown_up_requirement, mana_available_requirement],
+        effect_functions: [
+            cost_mana,
+            (context, action) => {
+                action.cooldown_date = tick_counter;
+                const size_c = action.hit_cells;
+                const to_sides = (size_c - 1) / 2
+                const middle_x = context.target_cell[0];
+                const middle_y = context.target_cell[1];
+
+                for (let h = 0; h < action.per_second * action.duration; h++)
+                {
+                    const cell_position = get_cell_in_circle(middle_x, middle_y, action.radius);
+                    const one_context = { target_cell: cell_position, source_entity: context.source_entity, target_entity: context.target_entity };
+
+                    const tick_date = tick_counter + h * ticks_per_second / action.per_second;
+
+                    scheduled_callbacks.push({
+                        callbacks: [
+                            (cont) => {
+                                const indicator = aoe_indicator_effect(cont.target_cell[0], cont.target_cell[1], size_c, ticks_per_second * action.per_duration);
+                                visual_effects.push(indicator);
+
+                                /** @type {Visual_Effect} */
+                                const fire_droplet = {
+                                    duration: ticks_per_second * action.per_duration,
+                                    size: 32,
+                                    time: 0,
+                                    x: cont.target_cell[0],
+                                    y: cont.target_cell[1],
+                                    draw_callback: (effect) => {
+                                        const remaining_perc = 1 - effect.time / effect.duration;
+                                        ctx.drawImage(fire_rain_image, effect.x * cell_size - to_sides * cell_size,
+                                            (effect.y - to_sides - 1) * cell_size - remaining_perc * canvas.height * 2, cell_size * size_c, cell_size * size_c);
+                                    },
+                                }
+
+                                visual_effects.push(fire_droplet);
+
+                                scheduled_callbacks.push({
+                                    callbacks: [
+                                        (con => {
+                                            const entities = entities_inside(con.target_cell[0], con.target_cell[1], size_c);
+
+
+                                            for (let i = 0; i < entities.length; i++)
+                                            {
+                                                const entity = entities[i];
+                                                damage_entity({
+                                                    source_entity: con.source_entity,
+                                                    target_entity: entity,
+                                                    damage: {
+                                                        amount: 10,
+                                                    }
+                                                })
+                                            }
+                                        })
+                                    ],
+                                    contexts: [cont],
+                                    tick_date: tick_date + action.per_duration * ticks_per_second,
+                                })
+
+                            }
+                        ],
+                        contexts: [one_context],
+                        tick_date: tick_date,
+                    })
+
+                }
+            }
+        ],
+        cooldown: ticks_per_second * 10,
+        cooldown_date: tick_counter - ticks_per_second * 10,
+        image: fire_rain_image,
+        mana_cost: 10,
+        range: 10,
+        duration: 10,
+        radius: 8,
+        hit_cells: 3,
+        per_second: 2,
+        per_duration: 2.5
+    }
+}
+
+/** @type {Create_Action} */
+const fire_ball_spell = (favour) => {
+    return {
+        name: "Fire Ball",
+        type: Action_Type.SPELL,
+        requirements: [in_cell_range_requirement, cooldown_up_requirement, mana_available_requirement],
+        effect_functions: [
+            cost_mana,
+            (context, action) => {
+                action.cooldown_date = tick_counter;
+                const size_c = action.hit_cells;
+                const to_sides = (size_c - 1) / 2
+                const middle_x = context.target_cell[0];
+                const middle_y = context.target_cell[1];
+
+                const cell_position = get_cell_in_circle(middle_x, middle_y, action.radius);
+                const one_context = { target_cell: cell_position, source_entity: context.source_entity, target_entity: context.target_entity };
+
+                const tick_date = tick_counter + h * ticks_per_second / action.per_second;
+
+                scheduled_callbacks.push({
+                    callbacks: [
+                        (cont) => {
+                            const indicator = aoe_indicator_effect(cont.target_cell[0], cont.target_cell[1], size_c, ticks_per_second * action.per_duration);
+                            visual_effects.push(indicator);
+
+                            /** @type {Visual_Effect} */
+                            const fire_droplet = {
+                                duration: ticks_per_second * action.per_duration,
+                                size: 32,
+                                time: 0,
+                                x: cont.target_cell[0],
+                                y: cont.target_cell[1],
+                                draw_callback: (effect) => {
+                                    const remaining_perc = 1 - effect.time / effect.duration;
+                                    ctx.drawImage(fire_rain_image, effect.x * cell_size - to_sides * cell_size,
+                                        (effect.y - to_sides - 1) * cell_size - remaining_perc * canvas.height * 2, cell_size * size_c, cell_size * size_c);
+                                },
+                            }
+
+                            visual_effects.push(fire_droplet);
+
+
+                            const entities = entities_inside(con.target_cell[0], con.target_cell[1], size_c);
+
+                            for (let i = 0; i < entities.length; i++)
+                            {
+                                const entity = entities[i];
+                                damage_entity({
+                                    source_entity: con.source_entity,
+                                    target_entity: entity,
+                                    damage: {
+                                        amount: 10,
+                                    }
+                                })
+                            }
+
+                        }
+                    ],
+                    contexts: [one_context],
+                    tick_date: tick_date,
+                })
+
+            }
+        ],
+        cooldown: ticks_per_second * 10,
+        cooldown_date: tick_counter - ticks_per_second * 10,
+        image: fire_rain_image,
+        mana_cost: 10,
+        range: 10,
+        duration: 10,
+        radius: 8,
+        hit_cells: 3,
+        per_second: 2,
+        per_duration: 2.5
     }
 }
 
@@ -958,6 +1134,25 @@ const gold_sword_equipment = (favour = 0) => {
 }
 
 /** @type {Create_Equipment} */
+const axe_equipment = (favour = 0) => {
+    return {
+        flat_stats: {
+            damage: 7
+        },
+        multiplicative_stats: {
+            attack_speed: 0.5 + 0.05 * Math.trunc(favour / 6 * Math.random()),
+            damage: 1.2,
+        },
+        type: Equipment_Type.WEAPON,
+        image: axe_image,
+        id: id_counter++,
+        display_name: "Axe",
+        action: melee_attack(),
+        name: "axe",
+    }
+}
+
+/** @type {Create_Equipment} */
 const test_bow_equipment = (favour = 0) => {
     return {
         flat_stats: {
@@ -1293,7 +1488,7 @@ function close_inventory(inventory) {
 /** @type {Create_Entity} */
 const red_knight_entity = (x, y, protecting) => {
     const melee_attack_instance = melee_attack();
-    const sword = test_sword_equipment();
+    const weapon = Math.random() > 0.3 ? test_sword_equipment() : axe_equipment();
     return {
         display_name: "Mean Red Knight",
         x: x,
@@ -1301,13 +1496,13 @@ const red_knight_entity = (x, y, protecting) => {
         entity_type: 'ENEMY',
         base_stats: {
             attack_speed: 1,
-            max_hp: 20,
+            max_hp: hp_base_entity * 1,
             movement_speed: get_random_int(4, 6),
         },
         attack_timer: ticks_per_second,
         enemy_type: Enemy_Type.RED_KNIGHT,
         basic_attack: melee_attack_instance,
-        weapon: sword,
+        weapon: weapon,
         phase: protecting ? Phase.PROTECTING : Phase.WANDERING,
         phase_states: {
             chasing: {
@@ -1328,7 +1523,7 @@ const red_knight_entity = (x, y, protecting) => {
             equipments: [
                 test_chestplate_equipment(0),
                 test_helmet_equipment(0),
-                sword,
+                weapon,
             ],
             type: Inventory_Type.EQUIPPED,
         },
@@ -1980,7 +2175,7 @@ mark_structure_cells(castle_structure, castle_pos[0], castle_pos[1], 0);
 
     /** @type {Array<Entity>} */
     const start_entities = [
-        // red_knight_entity(20, 20),
+        red_knight_entity(20, 20),
         /* red_melee_entity(30, 30),
         red_melee_entity(40, 40),
         red_bow_entity(30, 40),
@@ -2025,6 +2220,12 @@ function calculate_entity_stats(entity) {
     const old_movement_speed = entity.stats?.movement_speed;
 
     entity.stats = { ...entity.base_stats }
+
+    if (entity.status_effects.wet)
+    {
+
+        entity.stats.attack_speed *= Math.min(2, 50 / (50 + Math.max(-49, entity.status_effects.wet)));
+    }
 
     if (entity.equipped_items?.equipments && entity.equipped_items?.equipments.length != 0)
     {
@@ -2153,6 +2354,7 @@ function add_player(player) {
             construct_spell(),
             spike_spell(),
             freeze_spell(),
+            fire_rain_spell(),
         ],
         phase_states: {
             chasing: {
@@ -2189,7 +2391,7 @@ function add_player(player) {
 
     /** @type {Inventory} */
     const inventory = {
-        equipments: [test_bow_equipment()],
+        equipments: [test_bow_equipment(), axe_equipment()],
         slot_count: 10,
         type: Inventory_Type.PLAYER,
     };
@@ -3296,6 +3498,8 @@ function draw_equipped_items(entity, x, y, zoom) {
     if (images.has(gold_sword_image)) ctx.drawImage(gold_sword_image, x - zoom * 0, y, 32 * zoom, 32 * zoom);
     if (images.has(diamond_sword_image)) ctx.drawImage(diamond_sword_image, x - zoom * 0, y, 32 * zoom, 32 * zoom);
 
+    if (images.has(axe_image)) ctx.drawImage(axe_image, x - zoom * 0, y - 48 * zoom / 3, 48 * zoom, 48 * zoom);
+
     if (images.has(bow_image)) ctx.drawImage(bow_image, x, y, 32 * zoom, 32 * zoom);
     //ctx.drawImage(bow_image, x, y, 32 * zoom, 32 * zoom);
 
@@ -3902,13 +4106,17 @@ function tick() {
     {
         const cloud = clouds[i];
         const entities = entities_inside(cloud.x, cloud.y, cloud.radius_2 * 2 - 2);
+        const tick_group = tick_counter % ticks_per_second;
         for (let j = 0; j < entities.length; j++)
         {
             const entity = entities[j];
+            if (entity.id % ticks_per_second != tick_group) continue;
             if (distance_2(entity.x, entity.y, cloud.x, cloud.y) > cloud.radius_2 * cloud.radius_2) continue;
 
             const old_wetness = entity.status_effects.wet || 0;
-            entity.status_effects.wet = old_wetness + 1 / ticks_per_second;
+            entity.status_effects.wet = old_wetness + 1;
+            calculate_entity_stats(entity);
+            console.log('e', entity.id, entity.status_effects.wet, entity.stats.attack_speed);
         }
     }
 
@@ -4281,5 +4489,22 @@ function entity_distance(entity1, entity2) {
 /** @type {(x1: number, y1: number, x2: number, y2: number) => number} */
 function distance_2(x1, y1, x2, y2) {
     return (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
+}
+
+/** @type {(middle_x: number, middle_y: number, radius: number)} */
+function get_cell_in_circle(middle_x, middle_y, radius) {
+    let x;
+    let y;
+
+    do
+    {
+        x = (Math.random() - 0.5) * 2;
+        y = (Math.random() - 0.5) * 2;
+    } while (x * x + y * y > 1);
+
+    x = Math.round(x * radius);
+    y = Math.round(y * radius);
+
+    return [middle_x + x, middle_y + y];
 }
 //#endregion -----------------------------------------------------------------------
