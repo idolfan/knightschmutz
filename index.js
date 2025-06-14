@@ -82,6 +82,12 @@ const axe_image = new Image();
 axe_image.src = './images/axe.png';
 const fire_rain_image = new Image();
 fire_rain_image.src = './images/fire_rain.png';
+const fire_ball_image = new Image();
+fire_ball_image.src = './images/fire_ball.png';
+const fire_ball_trail_1_image = new Image();
+fire_ball_trail_1_image.src = './images/fire_ball_trail_1.png';
+const fire_ball_trail_2_image = new Image();
+fire_ball_trail_2_image.src = './images/fire_ball_trail_2.png';
 
 //#endregion -----------------------------------------------------------------------
 //#region ----------------------- Constants ----------------------------------------
@@ -716,76 +722,105 @@ const fire_ball_spell = (favour) => {
     return {
         name: "Fire Ball",
         type: Action_Type.SPELL,
-        requirements: [in_cell_range_requirement, cooldown_up_requirement, mana_available_requirement],
+        requirements: [cooldown_up_requirement, mana_available_requirement],
         effect_functions: [
             cost_mana,
             (context, action) => {
                 action.cooldown_date = tick_counter;
                 const size_c = action.hit_cells;
                 const to_sides = (size_c - 1) / 2
+
                 const middle_x = context.target_cell[0];
                 const middle_y = context.target_cell[1];
 
-                const cell_position = get_cell_in_circle(middle_x, middle_y, action.radius);
-                const one_context = { target_cell: cell_position, source_entity: context.source_entity, target_entity: context.target_entity };
+                const origin = [context.source_entity.x, context.source_entity.y];
+                const direction = [context.target_cell[0] - context.source_entity.x, context.target_cell[1] - context.source_entity.y];
+                const length = Math.hypot(direction[0], direction[1]);
 
-                const tick_date = tick_counter + h * ticks_per_second / action.per_second;
+                if (length > 10)
+                {
+                    direction[0] = direction[0] * 10 / length;
+                    direction[1] = direction[1] * 10 / length;
+                    console.log(direction);
+                }
 
-                scheduled_callbacks.push({
-                    callbacks: [
-                        (cont) => {
-                            const indicator = aoe_indicator_effect(cont.target_cell[0], cont.target_cell[1], size_c, ticks_per_second * action.per_duration);
-                            visual_effects.push(indicator);
+                const duration = length / action.speed;
 
-                            /** @type {Visual_Effect} */
-                            const fire_droplet = {
-                                duration: ticks_per_second * action.per_duration,
-                                size: 32,
-                                time: 0,
-                                x: cont.target_cell[0],
-                                y: cont.target_cell[1],
-                                draw_callback: (effect) => {
-                                    const remaining_perc = 1 - effect.time / effect.duration;
-                                    ctx.drawImage(fire_rain_image, effect.x * cell_size - to_sides * cell_size,
-                                        (effect.y - to_sides - 1) * cell_size - remaining_perc * canvas.height * 2, cell_size * size_c, cell_size * size_c);
-                                },
-                            }
+                /** @type {Visual_Effect} */
+                const fire_ball = {
+                    duration: ticks_per_second * duration,
+                    size: 32,
+                    time: 0,
+                    x: origin[0],
+                    y: origin[1],
 
-                            visual_effects.push(fire_droplet);
+                    draw_callback: (effect) => {
+                        const passed_perc = effect.time / effect.duration;
+                        if (passed_perc > 1) return;
+
+                        effect.x = origin[0] + direction[0] * passed_perc;
+                        effect.y = origin[1] + direction[1] * passed_perc;
+
+                        // Trail 2
+                        ctx.drawImage(fire_ball_trail_2_image, (effect.x - to_sides - direction[0] / length * 0.4 * action.hit_cells) * cell_size,
+                            (effect.y - to_sides - direction[1] / length * 0.4 * action.hit_cells) * cell_size, cell_size * size_c, cell_size * size_c);
+
+                        // Trail 1
+                        ctx.drawImage(fire_ball_trail_1_image, (effect.x - to_sides - direction[0] / length * 0.2 * action.hit_cells) * cell_size,
+                            (effect.y - to_sides - direction[1] / length * 0.2 * action.hit_cells) * cell_size, cell_size * size_c, cell_size * size_c);
 
 
-                            const entities = entities_inside(con.target_cell[0], con.target_cell[1], size_c);
+                        // Fire ball
+                        ctx.drawImage(fire_ball_image, (effect.x - to_sides) * cell_size,
+                            (effect.y - to_sides) * cell_size, cell_size * size_c, cell_size * size_c);
 
-                            for (let i = 0; i < entities.length; i++)
-                            {
-                                const entity = entities[i];
-                                damage_entity({
-                                    source_entity: con.source_entity,
-                                    target_entity: entity,
-                                    damage: {
-                                        amount: 10,
-                                    }
-                                })
-                            }
+                
+                    },
+                    tick_callback: (effect) => {
+                        const x = effect.x;
+                        const y = effect.y;
+                        const entities = entities_inside_rect(Math.floor(x), Math.floor(y), Math.ceil(x), Math.ceil(y));
 
+                        let hit = false;
+
+                        for (let i = 0; i < entities.length; i++)
+                        {
+                            const entity = entities[i];
+                            if (entity == context.source_entity) continue;
+
+                            damage_entity({
+                                source_entity: context.source_entity,
+                                target_entity: entity,
+                                damage: {
+                                    amount: 30,
+                                }
+                            })
+                            affect_entity({
+                                source_entity: context.source_entity,
+                                target_entity: entity,
+                                damage: {
+                                    status_effect: Status_Effect.BURNING,
+                                    amount: 10,
+                                }
+                            })
+                            hit = true;
                         }
-                    ],
-                    contexts: [one_context],
-                    tick_date: tick_date,
-                })
 
+                        if (hit) fire_ball.time = fire_ball.duration + 1;
+                    },
+                }
+
+                visual_effects.push(fire_ball);
             }
         ],
-        cooldown: ticks_per_second * 10,
-        cooldown_date: tick_counter - ticks_per_second * 10,
-        image: fire_rain_image,
+        cooldown: ticks_per_second * 1,
+        cooldown_date: tick_counter - ticks_per_second * 1,
+        image: fire_ball_image,
         mana_cost: 10,
         range: 10,
-        duration: 10,
-        radius: 8,
         hit_cells: 3,
-        per_second: 2,
-        per_duration: 2.5
+        speed: 8,
+
     }
 }
 
@@ -1529,7 +1564,7 @@ const red_knight_entity = (x, y, protecting) => {
         },
         on_death: [
             (combat_context) => {
-                spend_mana(combat_context.source_entity, -5);
+                spend_mana(combat_context.source_entity, -20);
             }
         ]
     }
@@ -2355,6 +2390,7 @@ function add_player(player) {
             spike_spell(),
             freeze_spell(),
             fire_rain_spell(),
+            fire_ball_spell(),
         ],
         phase_states: {
             chasing: {
@@ -2567,6 +2603,21 @@ function entities_inside(x, y, size) {
     const y1 = Math.max(0, Math.floor(y - r));
     const x2 = Math.min(world_area_size - 1, Math.floor(x + r));
     const y2 = Math.min(world_area_size - 1, Math.floor(y + r));
+    for (let i = x1; i <= x2; i++)
+    {
+        for (let j = y1; j <= y2; j++)
+        {
+            const entity = entity_positions[i][j];
+            if (entity) result.push(entity);
+        }
+    }
+
+    return result;
+}
+
+/** @type {(x1: number, y1: number, x2: number, y2: number) => Entity[]} */
+function entities_inside_rect(x1, y1, x2, y2) {
+    const result = [];
     for (let i = x1; i <= x2; i++)
     {
         for (let j = y1; j <= y2; j++)
@@ -2999,6 +3050,7 @@ function draw(time) {
     ctx.closePath();
     ctx.beginPath();
 
+    // Draw visual effects on top
     for (let i = 0; i < visual_effects.length; i++)
     {
 
@@ -4116,7 +4168,6 @@ function tick() {
             const old_wetness = entity.status_effects.wet || 0;
             entity.status_effects.wet = old_wetness + 1;
             calculate_entity_stats(entity);
-            console.log('e', entity.id, entity.status_effects.wet, entity.stats.attack_speed);
         }
     }
 
