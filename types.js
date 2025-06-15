@@ -43,6 +43,7 @@ const Entity_Type = {
  * @property {number} attack_timer - in ticks since last attack
  * @property {Entity_Stats} base_stats - Used to calculate stats
  * @property {Entity_Stats} stats - Actual stats being used during gameplay
+ * @property {Damage_Modifiers} damage_modifiers
  * @property {Status_Effects} status_effects
  * @property {Inventory} equipped_items
  * @property {Inventory} inventory
@@ -82,13 +83,28 @@ const Entity_Type = {
  * @property {number} max_hp
  * @property {number} current_hp
  * @property {number} attack_speed
- * @property {number} damage
  * @property {number} movement_speed
  * @property {number} armor
  * @property {number} ranged_range_bonus
  * @property {number} melee_range_bonus
  * @property {number} max_mana
  * @property {number} current_mana
+ */
+
+/** 
+ * @typedef {Object} Damage_Modifiers
+ * @property {Object} adds
+ * @property {number} adds.melee
+ * @property {number} adds.ranged
+ * @property {number} adds.fire
+ * @property {number} adds.frost
+ * @property {number} adds.lightning
+ * @property {Object} mults
+ * @property {number} mults.melee
+ * @property {number} mults.ranged
+ * @property {number} mults.fire
+ * @property {number} mults.frost
+ * @property {number} mults.lightning
  */
 
 /**
@@ -225,6 +241,7 @@ const Entity_Type = {
  * @typedef {Object} Equipment
  * @property {Entity_Stats} flat_stats
  * @property {Entity_Stats} multiplicative_stats
+ * @property {Damage_Modifiers} damage_modifiers
  * @property {Array<Equipment_Effect>} extra_effects
  * @property {Equipment_Type} type
  * @property {HTMLImageElement} image

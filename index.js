@@ -106,7 +106,6 @@ const Stat_Display_Names = Object.freeze({
     movement_speed: "Movement Speed",
     max_hp: "Health",
     attack_speed: "Attack Speed",
-    damage: "Base Damage",
     armor: "Armor",
 })
 
@@ -189,9 +188,21 @@ const Damage_Type = {
     FROST: 'frost',
     LIGHTNING: 'lightning',
     POISON: 'poison',
-    MELEE: 'physical',
+    MELEE: 'melee',
     RANGED: 'ranged',
 }
+
+/**
+ * @enum {string}
+ */
+const Damage_Display_Names = Object.freeze({
+    fire: "Fire damage",
+    frost: "Frost damage",
+    lightning: "Lightning damage",
+    poison: 'Poison damage',
+    melee: "Melee damage",
+    ranged: "Ranged damage",
+})
 
 //#endregion -----------------------------------------------------------------------
 //#region ----------------------- Game state ---------------------------------------
@@ -227,8 +238,6 @@ const paths = [];
 
 /** @type {Entity} */
 let player_entity;
-/** @type {Path} */
-let player_path = null;
 
 /** @type {Inventory} */
 let opened_inventory;
@@ -848,6 +857,101 @@ const fire_ball_spell = (favour) => {
     }
 }
 
+/** @type {Create_Action} */
+const aimed_arrow_attack = (favour) => {
+    return {
+        name: "Arrow shot",
+        type: Action_Type.ATTACK,
+        requirements: [attack_timer_up_requirement],
+        effect_functions: [
+            (context, action) => {
+                context.source_entity.attack_timer = 0;
+                const size_c = action.hit_cells;
+                const to_sides = (size_c - 1) / 2
+
+                const middle_x = context.target_cell[0];
+                const middle_y = context.target_cell[1];
+
+                const origin = [context.source_entity.x, context.source_entity.y];
+                const direction = [context.target_cell[0] - context.source_entity.x, context.target_cell[1] - context.source_entity.y];
+                const length = Math.hypot(direction[0], direction[1]);
+
+                if (length > 10)
+                {
+                    direction[0] = direction[0] * 10 / length;
+                    direction[1] = direction[1] * 10 / length;
+                    console.log(direction);
+                }
+
+                const duration = length / action.speed;
+
+                /** @type {Visual_Effect} */
+                const arrow = {
+                    duration: ticks_per_second * duration,
+                    size: 32,
+                    time: 0,
+                    x: origin[0],
+                    y: origin[1],
+                    destination: [origin[0] + direction[0], origin[1] + direction[1]],
+                    draw_callback: (effect) => {
+                        const passed_perc = effect.time / effect.duration;
+                        if (passed_perc > 1) return;
+
+                        effect.x = origin[0] + direction[0] * passed_perc;
+                        effect.y = origin[1] + direction[1] * passed_perc;
+
+                        ctx.strokeStyle = "rgb(127,51,0)";
+                        ctx.lineWidth = 4 * zoom;
+                        ctx.moveTo(effect.x * cell_size, effect.y * cell_size);
+                        ctx.lineTo((effect.x + direction[0] / length * 0.4) * cell_size, (effect.y + direction[1] / length * 0.4) * cell_size);
+                        ctx.stroke();
+                        ctx.beginPath();
+                    },
+                    tick_callback: (effect) => {
+                        const x = effect.x;
+                        const y = effect.y;
+                        const entities = entities_inside_rect(Math.floor(x), Math.floor(y), Math.ceil(x), Math.ceil(y));
+
+                        let hit = false;
+
+                        for (let i = 0; i < entities.length; i++)
+                        {
+                            const entity = entities[i];
+                            if (entity == context.source_entity) continue;
+
+                            damage_entity({
+                                source_entity: context.source_entity,
+                                target_entity: entity,
+                                damage: {
+                                    amount: 30,
+                                    type: Damage_Type.FIRE,
+                                }
+                            })
+                            affect_entity({
+                                source_entity: context.source_entity,
+                                target_entity: entity,
+                                damage: {
+                                    status_effect: Status_Effect.BURNING,
+                                    amount: 10,
+                                }
+                            })
+                            hit = true;
+                        }
+
+                        if (hit) arrow.time = arrow.duration + 1;
+                    },
+                }
+
+                visual_effects.push(arrow);
+            }
+        ],
+        range: 10,
+        hit_cells: 1,
+        speed: 24,
+
+    }
+}
+
 /** @type {(x: number, y: number, size: number, time: number) => Visual_Effect} */
 const aoe_indicator_effect = (x, y, size, duration) => {
     return {
@@ -1106,11 +1210,9 @@ const test_helmet_equipment = (favour = 0) => {
 const test_sword_equipment = (favour = 0) => {
     return {
         flat_stats: {
-            damage: 3
         },
         multiplicative_stats: {
             attack_speed: 0.85 + 0.05 * Math.trunc(favour / 6 * Math.random()),
-            damage: 1.2,
         },
         type: Equipment_Type.WEAPON,
         image: sword_image,
@@ -1123,13 +1225,19 @@ const test_sword_equipment = (favour = 0) => {
 
 /** @type {Create_Equipment} */
 const diamond_sword_equipment = (favour = 0) => {
+    const adds = {};
+    const mults = {};
+    if (Math.random() < 0.25) adds.frost = Math.trunc(Math.random() * (6 + favour / 2));
+    if (Math.random() < 0.25) mults.frost = 1 + (Math.trunc(Math.random() * (25 + favour))) / 100;
     return {
         flat_stats: {
-            damage: 3
         },
         multiplicative_stats: {
             attack_speed: 0.85 + 0.05 * Math.trunc(favour / 6 * Math.random()),
-            damage: 1.2,
+        },
+        damage_modifiers: {
+            adds: adds,
+            mults: mults,
         },
         type: Equipment_Type.WEAPON,
         image: diamond_sword_image,
@@ -1144,11 +1252,9 @@ const diamond_sword_equipment = (favour = 0) => {
 const emerald_sword_equipment = (favour = 0) => {
     return {
         flat_stats: {
-            damage: 3
         },
         multiplicative_stats: {
             attack_speed: 0.85 + 0.05 * Math.trunc(favour / 6 * Math.random()),
-            damage: 1.2,
         },
         type: Equipment_Type.WEAPON,
         image: emerald_sword_image,
@@ -1161,13 +1267,21 @@ const emerald_sword_equipment = (favour = 0) => {
 
 /** @type {Create_Equipment} */
 const ruby_sword_equipment = (favour = 0) => {
+    const adds = {};
+    const mults = {};
+    if (Math.random() < 0.25) adds.fire = Math.trunc(Math.random() * (6 + favour / 2));
+    if (Math.random() < 0.25) mults.fire = 1 + (Math.trunc(Math.random() * (25 + favour))) / 100;
+    console.log(adds, mults, favour);
+
     return {
         flat_stats: {
-            damage: 3
         },
         multiplicative_stats: {
             attack_speed: 0.85 + 0.05 * Math.trunc(favour / 6 * Math.random()),
-            damage: 1.2,
+        },
+        damage_modifiers: {
+            adds: adds,
+            mults: mults
         },
         type: Equipment_Type.WEAPON,
         image: ruby_sword_image,
@@ -1182,11 +1296,9 @@ const ruby_sword_equipment = (favour = 0) => {
 const gold_sword_equipment = (favour = 0) => {
     return {
         flat_stats: {
-            damage: 3
         },
         multiplicative_stats: {
             attack_speed: 0.85 + 0.05 * Math.trunc(favour / 6 * Math.random()),
-            damage: 1.2,
         },
         type: Equipment_Type.WEAPON,
         image: gold_sword_image,
@@ -1201,11 +1313,9 @@ const gold_sword_equipment = (favour = 0) => {
 const axe_equipment = (favour = 0) => {
     return {
         flat_stats: {
-            damage: 7
         },
         multiplicative_stats: {
             attack_speed: 0.5 + 0.05 * Math.trunc(favour / 6 * Math.random()),
-            damage: 1.2,
         },
         type: Equipment_Type.WEAPON,
         image: axe_image,
@@ -1224,14 +1334,13 @@ const test_bow_equipment = (favour = 0) => {
         },
         multiplicative_stats: {
             attack_speed: 1.3 + 0.05 * Math.trunc(favour / 6 * Math.random()),
-            damage: 0.9
         },
         type: Equipment_Type.WEAPON,
         image: bow_image,
         id: id_counter++,
         display_name: "Simple Bow",
         name: "simple_bow",
-        action: bow_attack(),
+        action: aimed_arrow_attack(),
     }
 }
 
@@ -2283,7 +2392,25 @@ function calculate_entity_stats(entity) {
 
     const old_movement_speed = entity.stats?.movement_speed;
 
-    entity.stats = { ...entity.base_stats }
+    entity.stats = { ...entity.base_stats };
+    entity.damage_modifiers = {
+        adds: {
+            fire: 0,
+            frost: 0,
+            lightning: 0,
+            poison: 0,
+            melee: 0,
+            ranged: 0,
+        },
+        mults: {
+            fire: 1,
+            frost: 1,
+            lightning: 1,
+            poison: 1,
+            melee: 1,
+            ranged: 1,
+        }
+    }
 
     if (entity.status_effects.wet)
     {
@@ -2301,18 +2428,32 @@ function calculate_entity_stats(entity) {
         for (let i = 0; i < arr.length; i++)
         {
 
+            /** @type {Equipment} */
             const equipment = slots_exist ? arr[i].equipment : arr[i];
 
             if (!equipment) continue;
 
-            if (equipment.flat_stats)
+            if (equipment.flat_stats) // Flat stats
                 Object.keys(equipment.flat_stats).forEach((key) => {
                     entity.stats[key] = (entity.stats[key] ?? 0) + equipment.flat_stats[key];
                 })
-            if (equipment.multiplicative_stats)
+            if (equipment.multiplicative_stats) // Mult stats
                 Object.keys(equipment.multiplicative_stats).forEach((key) => {
                     entity.stats[key] = (entity.stats[key] ?? 1) * equipment.multiplicative_stats[key];
                 })
+            if (equipment.damage_modifiers)
+            {
+                const adds = equipment.damage_modifiers.adds;
+                const mults = equipment.damage_modifiers.mults;
+
+                Object.keys(adds).forEach((key) => { // Flat damage
+                    entity.damage_modifiers.adds[key] += adds[key];
+                })
+                Object.keys(mults).forEach((key) => { // Mult damage
+                    entity.damage_modifiers.mults[key] *= mults[key];
+                    entity.damage_modifiers.adds[key] *= mults[key];
+                })
+            }
             if (equipment.extra_effects)
                 equipment.extra_effects.forEach((extra_effect) => {
                     extra_effect.effect_callback({ ...extra_effect.context, entity });
@@ -2437,7 +2578,7 @@ function add_player(player) {
         test_amulet_equipment(),
         test_chestplate_equipment(),
         test_helmet_equipment(),
-        test_sword_equipment(),
+        ruby_sword_equipment(),
     ]
 
     /** @type {Inventory} */
@@ -2475,6 +2616,7 @@ function add_player(player) {
 /** @type {(combat_context: Combat_Context)} */
 function damage_entity(combat_context) {
     const target_entity = combat_context.target_entity;
+    const source_entity = combat_context.source_entity;
     const damage = combat_context.damage;
     const type = damage.type;
     const stats = target_entity.stats;
@@ -2483,6 +2625,16 @@ function damage_entity(combat_context) {
     const is_physical = type == Damage_Type.MELEE || type == Damage_Type.RANGED;
     const is_magic = type == Damage_Type.FIRE || type == Damage_Type.FROST || type == Damage_Type.LIGHTNING;
     let resulting_amount = damage.amount;
+
+    if (source_entity.damage_modifiers.mults[type] != 1)
+    {
+        resulting_amount *= source_entity.damage_modifiers.mults[type];
+    }
+
+    if (source_entity.damage_modifiers.adds[type] != 0)
+    {
+        resulting_amount += source_entity.damage_modifiers.adds[type];
+    }
 
     if (is_physical && stats.armor) // Armor
     {
@@ -2974,7 +3126,7 @@ function draw(time) {
         time_since_entity_hovered = 0;
     }
 
-    if (time_since_entity_hovered == 2 && hovered_entity)
+    if (time_since_entity_hovered == 2 && hovered_entity && keys_pressed.ctrl)
     {
         console.log('Hovered entity:', hovered_entity);
     }
@@ -3264,7 +3416,7 @@ function draw(time) {
     }
 
     // Entity hover info
-    if (hovered_entity)
+    if (hovered_entity && keys_pressed.ctrl)
     {
 
         //draw_image_boundaries(info_small_image, info_small_boundaries);
@@ -3331,7 +3483,7 @@ function draw(time) {
     }
 
     // Action hover info
-    if (hovered_action_slot)
+    if (hovered_action_slot && keys_pressed.ctrl)
     {
         draw_image_boundaries(side_info_image, side_info_boundaries);
 
@@ -3447,6 +3599,30 @@ function draw(time) {
                 })
 
                 delete strings["current_hp"];
+
+                const damage_mult_keys = Object.keys(equipment.damage_modifiers?.mults || {});
+                damage_mult_keys.forEach((key) => {
+                    const value = equipment.damage_modifiers.mults[key];
+                    if (!strings[key])
+                    {
+                        strings[key] = "" + (Damage_Display_Names[key]) + ": "
+                        strings[key] += ((value - 1) * 100).toFixed(1) + "%";
+                    }
+                })
+
+                const damage_add_keys = Object.keys(equipment.damage_modifiers?.adds || {});
+                damage_add_keys.forEach((key) => {
+                    const value = equipment.damage_modifiers.adds[key];
+                    if (!strings[key])
+                    {
+                        strings[key] = "" + (Damage_Display_Names[key] || key) + ": "
+                        strings[key] += (value > 0 ? "+" : "") + value.toFixed(1);
+                    } else
+                    {
+                        strings[key] += " | " + (value > 0 ? "+" : "") + value.toFixed(1);
+                    }
+                })
+
 
 
                 let line_height = boundaries[1];
@@ -3584,6 +3760,17 @@ function draw(time) {
             {
                 strings[key] = "" + (Stat_Display_Names[key]) + ": "
                 strings[key] += value.toFixed(1);
+            }
+        })
+
+        const damage_keys = Object.keys(player_entity.damage_modifiers.adds);
+        damage_keys.forEach((key) => {
+            const add_value = player_entity.damage_modifiers.adds[key];
+            const mult_value = player_entity.damage_modifiers.mults[key];
+            if (!strings[key] && Damage_Display_Names[key] != null && (add_value != 0 || mult_value != 1))
+            {
+                strings[key] = "" + (Damage_Display_Names[key]) + ": "
+                strings[key] += ((mult_value - 1) * 100).toFixed(1) + "%" + " | " + (add_value > 0 ? "+" : "") + add_value.toFixed(1);
             }
         })
 
@@ -3833,10 +4020,9 @@ function handle_inputs() {
         }
 
         player_entity.phase = Phase.PATHING;
-
-        if (keys_pressed.shift && player_path)
+        if (keys_pressed.shift && player_entity.path.path_steps.length > 0)
         {
-            const existing_path = player_path;
+            const existing_path = player_entity.path;
             const last_step = existing_path.path_steps[existing_path.path_steps.length - 1];
             const path_steps = calculate_path_positions([last_step[0], last_step[1]], clicked_cell);
 
@@ -3919,8 +4105,13 @@ function handle_inputs() {
         } else
         {
             const target_entity = hovered_entity;
-            if (!target_entity) break right_mouse_button;
-            const context = { target_entity, source_entity: player_entity }
+            const context = { target_entity, source_entity: player_entity, target_cell: [hovered_cell[0], hovered_cell[1]] };
+            if (!target_entity)
+            {
+                take_action(context, player_entity.basic_attack);
+                break right_mouse_button;
+            }
+
 
             player_entity.phase = Phase.CHASING;
             player_entity.phase_states.chasing.action = player_entity.basic_attack;
@@ -3997,7 +4188,7 @@ function handle_inputs() {
 //#region ------------------------ Listeners ---------------------------------------
 window.addEventListener('keydown', (event) => {
     const key = event.code.replace("Digit", "").replace("Key", "");
-    // console.log('key', key.toLowerCase());
+    //console.log('key', key.toLowerCase());
     switch (key.toLowerCase())
     {
         case 'w':
@@ -4012,8 +4203,11 @@ window.addEventListener('keydown', (event) => {
         case 'd':
             keys_pressed.d = true;
             break;
-        case 'shift':
+        case 'shiftleft':
             keys_pressed.shift = true;
+            break;
+        case 'controlleft':
+            keys_pressed.ctrl = true;
             break;
         case ' ':
             keys_pressed.space = true;
@@ -4056,8 +4250,11 @@ window.addEventListener('keyup', (event) => {
         case 'd':
             keys_pressed.d = false;
             break;
-        case 'shift':
+        case 'shiftleft':
             keys_pressed.shift = false;
+            break;
+        case 'controlleft':
+            keys_pressed.ctrl = false;
             break;
         case ' ':
             keys_pressed.space = false;
@@ -4519,7 +4716,8 @@ function process_standard_chasing(entity) {
     /** @type {Context} */
     const context = {
         source_entity: entity,
-        target_entity: target
+        target_entity: target,
+        target_cell: [entity.phase_states.chasing.target.x, entity.phase_states.chasing.target.y],
     }
 
     const action_failed = take_action(context, action);
@@ -4564,7 +4762,7 @@ function process_standard_kiting(entity) {
     }
 }
 
-/** @type {(entity: Entity, path_steps: Array<Position>) } */
+/** @type {(entity: Entity, path_steps: Array<Position>, append: boolean) } */
 function change_path(entity, path_steps, append = false) {
     const existing_path = entity.path;
 
@@ -4573,7 +4771,7 @@ function change_path(entity, path_steps, append = false) {
 
     const first_step = path_steps[0];
 
-    if (path_steps.length > 1 && first_step[0] == entity.x && first_step[1] == entity.y)
+    if (path_steps.length > 1 && ((first_step[0] == entity.x && first_step[1] == entity.y) || append))
         path_steps.shift();
 
     if (append)
@@ -4614,8 +4812,6 @@ function restart_tick() {
 
 /** @type {(start: Array<number>, end: Array<number>, with_entities?: boolean)} */
 function calculate_path_positions(start, end, with_entities) {
-    if(with_entities) console.log("with_entities");
-    else console.log("without_entities");
     const queue = [[start]];
     const visited = new Set();
     const [rows, cols] = [area_board.length, area_board[0].length];
