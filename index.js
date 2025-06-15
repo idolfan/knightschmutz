@@ -58,6 +58,8 @@ const spike_image = new Image();
 spike_image.src = './images/spike.png';
 const info_small_image = new Image();
 info_small_image.src = './images/info_small.png';
+const side_info_image = new Image();
+side_info_image.src = './images/side_info.png';
 const freeze_image = new Image();
 freeze_image.src = './images/freeze_visual.png';
 const red_ghost_image = new Image();
@@ -106,7 +108,13 @@ const Stat_Display_Names = Object.freeze({
     attack_speed: "Attack Speed",
     damage: "Base Damage",
     armor: "Armor",
+})
 
+const Action_Display_Names = Object.freeze({
+    range: "Range",
+    cooldown: "Cooldown",
+    mana_cost: "Mana cost",
+    type: "Type",
 })
 
 /**
@@ -171,6 +179,18 @@ const Status_Effect = {
     FREEZING: 'freezing',
     WET: 'wet',
     ELECTROCUTED: 'electrocuted',
+}
+
+/**
+ * @enum {string}
+ */
+const Damage_Type = {
+    FIRE: 'fire',
+    FROST: 'frost',
+    LIGHTNING: 'lightning',
+    POISON: 'poison',
+    MELEE: 'physical',
+    RANGED: 'ranged',
 }
 
 //#endregion -----------------------------------------------------------------------
@@ -355,7 +375,7 @@ const melee_attack = (favour) => {
         effect_functions: [(context) => {
             const combat_context = {
                 ...context,
-                damage: { amount: 15 }
+                damage: { amount: 15, type: Damage_Type.MELEE }
             }
             damage_entity(combat_context);
             context.source_entity.attack_timer = 0;
@@ -406,7 +426,7 @@ const bow_attack = (favour) => {
         effect_functions: [(context) => {
             const combat_context = {
                 ...context,
-                damage: { amount: 8 }
+                damage: { amount: 8, type: Damage_Type.RANGED }
             }
             context.source_entity.attack_timer = 0;
             const distance = entity_distance(context.source_entity, context.target_entity);
@@ -552,7 +572,8 @@ const spike_spell = (favour) => {
                                     source_entity: context.source_entity,
                                     target_entity: entity,
                                     damage: {
-                                        amount: 50
+                                        amount: 50,
+                                        type: Damage_Type.RANGED,
                                     }
                                 })
                             }
@@ -582,7 +603,7 @@ const freeze_spell = (favour) => {
             (context, action) => {
                 action.cooldown_date = tick_counter;
                 const size_c = 3;
-                const indicator = aoe_indicator_effect(context.target_cell[0], context.target_cell[1], size_c, ticks_per_second * 1.5);
+                const indicator = aoe_indicator_effect(context.target_cell[0], context.target_cell[1], size_c, action.indicator_duration);
                 visual_effects.push(indicator);
                 scheduled_callbacks.push({
                     callbacks: [
@@ -608,7 +629,7 @@ const freeze_spell = (favour) => {
                                     source_entity: context.source_entity,
                                     target_entity: entity,
                                     damage: {
-                                        amount: 7,
+                                        amount: 50,
                                         status_effect: Status_Effect.FREEZING,
                                     }
                                 })
@@ -616,7 +637,7 @@ const freeze_spell = (favour) => {
                         }
                     ],
                     contexts: [context],
-                    tick_date: tick_counter + ticks_per_second * 1.5,
+                    tick_date: tick_counter + action.indicator_duration,
                 })
             }
         ],
@@ -625,6 +646,7 @@ const freeze_spell = (favour) => {
         image: freeze_image,
         mana_cost: 10,
         range: 10,
+        indicator_duration: ticks_per_second * 1.2,
     }
 }
 
@@ -686,6 +708,7 @@ const fire_rain_spell = (favour) => {
                                                     target_entity: entity,
                                                     damage: {
                                                         amount: 10,
+                                                        type: Damage_Type.FIRE,
                                                     }
                                                 })
                                             }
@@ -774,7 +797,7 @@ const fire_ball_spell = (favour) => {
                         ctx.drawImage(fire_ball_image, (effect.x - to_sides) * cell_size,
                             (effect.y - to_sides) * cell_size, cell_size * size_c, cell_size * size_c);
 
-                
+
                     },
                     tick_callback: (effect) => {
                         const x = effect.x;
@@ -793,6 +816,7 @@ const fire_ball_spell = (favour) => {
                                 target_entity: entity,
                                 damage: {
                                     amount: 30,
+                                    type: Damage_Type.FIRE,
                                 }
                             })
                             affect_entity({
@@ -813,7 +837,7 @@ const fire_ball_spell = (favour) => {
                 visual_effects.push(fire_ball);
             }
         ],
-        cooldown: ticks_per_second * 1,
+        cooldown: ticks_per_second * 5,
         cooldown_date: tick_counter - ticks_per_second * 1,
         image: fire_ball_image,
         mana_cost: 10,
@@ -907,6 +931,10 @@ const info_small_boundaries = [(1 - inv_width_percent) * canvas.width, 0, (1) * 
 const info_small_margins = [6 / 83, 6 / 34, 6 / 83, 6 / 34];
 let info_small_zone_boundaries;
 
+const side_info_boundaries = [(1 - inv_width_percent * 47 / 83) * canvas.width, 0, (1) * canvas.width, null];
+const side_info_margins = [6 / 47, 6 / 106, 6 / 47, 6 / 106];
+let side_info_zone_boundaries;
+
 let loaded = false;
 
 /** @type {Slot} */
@@ -946,6 +974,7 @@ function load() {
     info_zone_boundaries = calculate_zone_boundaries(info_image, info_boundaries, info_margins);
     action_slots_zone_boundaries = calculate_zone_boundaries(actions_slots_image, action_slots_boundaries, action_slots_margins);
     info_small_zone_boundaries = calculate_zone_boundaries(info_small_image, info_small_boundaries, info_small_margins);
+    side_info_zone_boundaries = calculate_zone_boundaries(side_info_image, side_info_boundaries, side_info_margins);
 
     init_action_slots();
 
@@ -2293,7 +2322,7 @@ function calculate_entity_stats(entity) {
 
     if (entity.status_effects.freezing != null && entity.status_effects.freezing !== 0)
     {
-        const speed_mult = 10 / Math.max(10, (10 + entity.status_effects.freezing));
+        const speed_mult = 100 / Math.max(10, (100 + entity.status_effects.freezing));
         entity.stats.movement_speed *= speed_mult;
     }
 
@@ -2348,6 +2377,8 @@ function add_entity(entity) {
     if (!entity.status_effects) entity.status_effects = {};
 
     calculate_entity_stats(entity);
+
+    entity_positions[entity.x][entity.y] = entity;
     return entity;
 }
 
@@ -2444,13 +2475,52 @@ function add_player(player) {
 /** @type {(combat_context: Combat_Context)} */
 function damage_entity(combat_context) {
     const target_entity = combat_context.target_entity;
+    const damage = combat_context.damage;
+    const type = damage.type;
+    const stats = target_entity.stats;
+    const status_effects = target_entity.status_effects;
 
-    let resulting_amount = combat_context.damage.amount;
+    const is_physical = type == Damage_Type.MELEE || type == Damage_Type.RANGED;
+    const is_magic = type == Damage_Type.FIRE || type == Damage_Type.FROST || type == Damage_Type.LIGHTNING;
+    let resulting_amount = damage.amount;
 
-    if (target_entity.stats.armor)
+    if (is_physical && stats.armor) // Armor
     {
-        const armor_mult = 1 - (target_entity.stats.armor) / (target_entity.stats.armor + 100);
+        const armor_mult = 1 - (stats.armor) / (stats.armor + 100);
         resulting_amount *= armor_mult;
+    }
+
+    if (type == Damage_Type.FIRE && status_effects.freezing)
+    { // Extra fire damage on frost
+        const rate = 1 / 4;
+        const max_bonus_damage = resulting_amount * 0.5;
+
+        const bonus_damage = Math.min(status_effects.freezing * rate, max_bonus_damage);
+
+        resulting_amount += bonus_damage;
+        status_effects.freezing -= bonus_damage / rate;
+    }
+
+    if (type == Damage_Type.FIRE && status_effects.wet)
+    { // Lower fire damage on wetness
+        const rate = 1 / 4;
+        const max_malus_damage = resulting_amount * 0.5;
+
+        const malus_damage = Math.min(status_effects.wet * rate, max_malus_damage);
+
+        resulting_amount -= malus_damage;
+        status_effects.wet -= malus_damage / rate;
+    }
+
+    if (type == Damage_Type.LIGHTNING && status_effects.wet)
+    { // Extra lightning damage on wetness
+        const rate = 1 / 3;
+        const max_bonus_damage = resulting_amount * 0.25;
+
+        const bonus_damage = Math.min(status_effects.wet * rate, max_bonus_damage);
+
+        resulting_amount += bonus_damage;
+        status_effects.wet -= bonus_damage / rate;
     }
 
     target_entity.stats.current_hp -= resulting_amount;
@@ -2475,6 +2545,8 @@ function damage_entity(combat_context) {
         entity_on_death(combat_context);
     }
     //console.log('Damaged entity', target_entity);
+
+    calculate_entity_stats(combat_context.source_entity);
 }
 
 /** @type {(combat_context: Combat_Context)} */
@@ -2883,7 +2955,7 @@ function draw(time) {
     for (let i = 0; i < paths.length; i++)
     {
         const path = paths[i];
-        if (player_entity.path != path || path.path_steps.length == 0) continue;
+        if (/* player_entity.path != path || */ path.path_steps.length == 0) continue;
         ctx.beginPath();
         ctx.strokeStyle = 'green';
         ctx.moveTo(path?.path_steps[0][0] * cell_size + cell_size / 2, path?.path_steps[0][1] * cell_size + cell_size / 2);
@@ -3195,7 +3267,9 @@ function draw(time) {
     if (hovered_entity)
     {
 
-        draw_image_boundaries(info_small_image, info_small_boundaries);
+        //draw_image_boundaries(info_small_image, info_small_boundaries);
+        draw_image_boundaries(side_info_image, side_info_boundaries);
+
 
         ctx.fillStyle = '#00FF00';
         ctx.textAlign = 'left';
@@ -3208,7 +3282,7 @@ function draw(time) {
 
         ctx.font = '20px "Press Start 2P"';
 
-        const zone_b = info_small_zone_boundaries;
+        const zone_b = side_info_zone_boundaries;
         let line_height = zone_b[1];
 
         ctx.fillText("" + hovered_entity.display_name + " stats", zone_b[0], line_height, zone_b[2] - zone_b[0]);
@@ -3254,6 +3328,50 @@ function draw(time) {
             ctx.fillText(action.name, zone_b[0], line_height, zone_b[2] - zone_b[0]);
             line_height += 17;
         }
+    }
+
+    // Action hover info
+    if (hovered_action_slot)
+    {
+        draw_image_boundaries(side_info_image, side_info_boundaries);
+
+
+        ctx.fillStyle = '#00FF00';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+
+        const action = hovered_action_slot.action;
+
+        const strings = {};
+
+        ctx.font = '20px "Press Start 2P"';
+
+        const zone_b = side_info_zone_boundaries;
+        let line_height = zone_b[1];
+
+        ctx.fillText("" + action.name + " stats", zone_b[0], line_height, zone_b[2] - zone_b[0]);
+        line_height += 20;
+        ctx.fillText("----------------------------------", zone_b[0], line_height, zone_b[2] - zone_b[0]);
+        line_height += 20;
+
+        ctx.font = '15px "Press Start 2P"';
+
+        strings["range"] = "" + (Action_Display_Names["range"]) + ": " + action.range.toFixed(1);
+        strings["cooldown"] = "" + (Action_Display_Names["cooldown"]) + ": " + (action.cooldown / ticks_per_second).toFixed(1);
+        strings["mana_cost"] = "" + (Action_Display_Names["mana_cost"]) + ": " + action.mana_cost.toFixed(1);
+        strings["type"] = "" + (Action_Display_Names["type"]) + ": " + action.type;
+
+        const str_keys = Object.keys(strings);
+        for (let i = 0; i < str_keys.length; i++)
+        {
+            const str = strings[str_keys[i]];
+            if (str)
+                ctx.fillText(str, zone_b[0], line_height, zone_b[2] - zone_b[0]);
+            line_height += 17;
+        }
+
+        ctx.fillText("-------------------------", zone_b[0], line_height, zone_b[2] - zone_b[0]);
+        line_height += 17;
     }
 
     // Inventory
@@ -3620,6 +3738,9 @@ let time_since_entity_hovered = 0;
 
 /** @type {Slot} */
 let hovered_slot;
+
+/** @type {Action_Slot} */
+let hovered_action_slot;
 
 /** @type {Slot} */
 let dragged_slot_zone;
@@ -4044,8 +4165,26 @@ function tick() {
             }
         }
     }
-
     if (!found) hovered_slot = null;
+
+    found = false;
+    find_hovered_action: for (let i = 0; i < action_slots.length; i++)
+    {
+        const slot = action_slots[i];
+        const zone_b = slot.zone_boundaries;
+        const mouse_inside = mouse_position[0] > zone_b[0] && mouse_position[0] < zone_b[2]
+            && mouse_position[1] > zone_b[1] && mouse_position[1] < zone_b[3];
+
+        if (mouse_inside)
+        {
+            hovered_action_slot = slot;
+            found = true;
+            break find_hovered_action;
+        }
+    }
+    if (!found) hovered_action_slot = null;
+
+
 
     handle_inputs();
 
@@ -4250,7 +4389,7 @@ function process_enemy_ai() {
             if (entity.enemy_type == Enemy_Type.RED_MELEE)
             {
 
-                process_standard_chasing(entity, entity.path?.blocked_by);
+                process_standard_chasing(entity);
 
                 if (distance_to_closest_player > chase_lose_range)
                     entity.phase = Phase.WANDERING;
@@ -4296,7 +4435,7 @@ function process_enemy_ai() {
 
             } else
             {
-                process_standard_chasing(entity, entity.path?.blocked_by);
+                process_standard_chasing(entity);
 
                 if (distance_to_closest_player > chase_lose_range)
                     entity.phase = Phase.WANDERING;
@@ -4393,7 +4532,7 @@ function process_standard_chasing(entity) {
         return;
     }
 
-    const path_steps = calculate_path_positions([entity.x, entity.y], [target.x, target.y], entity.path?.blocked_by);
+    const path_steps = calculate_path_positions([entity.x, entity.y], [target.x, target.y], true /* entity.path?.blocked_by */);
     if (path_steps != null) change_path(entity, path_steps);
 
 }
@@ -4475,6 +4614,8 @@ function restart_tick() {
 
 /** @type {(start: Array<number>, end: Array<number>, with_entities?: boolean)} */
 function calculate_path_positions(start, end, with_entities) {
+    if(with_entities) console.log("with_entities");
+    else console.log("without_entities");
     const queue = [[start]];
     const visited = new Set();
     const [rows, cols] = [area_board.length, area_board[0].length];
@@ -4499,7 +4640,9 @@ function calculate_path_positions(start, end, with_entities) {
         for (const [dx, dy] of [[0, 1], [1, 0], [0, -1], [-1, 0]])
         {
             const [nx, ny] = [x + dx, y + dy];
-            if (nx >= 0 && nx < cols && ny >= 0 && ny < rows && ((area_board[nx][ny] === Cell_Type.EMPTY || area_board[nx][ny] === Cell_Type.CHEST) && (!with_entities || !entity_positions[nx][ny])))
+            if ((nx >= 0 && nx < cols && ny >= 0 && ny < rows) // in bounds
+                && (area_board[nx][ny] === Cell_Type.EMPTY || area_board[nx][ny] === Cell_Type.CHEST) // walkable
+                && ((end[0] == nx && end[1] == ny) || !with_entities || !entity_positions[nx][ny])) // not_blocked
             {
                 const key = posToStr([nx, ny]);
                 const in_boundaries = nx >= x_boundaries[0] && nx <= x_boundaries[1] && ny >= y_boundaries[0] && ny <= y_boundaries[1];

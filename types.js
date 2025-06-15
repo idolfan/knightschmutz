@@ -139,6 +139,7 @@ const Entity_Type = {
  * @property {HTMLImageElement} image
  * @property {number} mana_cost
  * @property {Action_Type} type
+ * @property {number} [indicator_duration]
  */
 
 /** 
@@ -178,6 +179,7 @@ const Entity_Type = {
  * @typedef {Object} Damage
  * @property {number} amount
  * @property {number} resulting_amount
+ * @property {Damage_Type} type
  * @property {Status_Effect} [status_effect]
  */
 
