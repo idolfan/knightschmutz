@@ -114,6 +114,7 @@ const Action_Display_Names = Object.freeze({
     cooldown: "Cooldown",
     mana_cost: "Mana cost",
     type: "Type",
+    damage: "Damage"
 })
 
 /**
@@ -192,6 +193,16 @@ const Damage_Type = {
     RANGED: 'ranged',
 }
 
+const Damage_Type_Colors = {
+    fire: "rgb(240, 58, 3)",
+    frost: "rgb(57, 224, 224)",
+    lightning: "rgb(79, 26, 122)",
+    poison: "rgb(26, 95, 26)",
+    melee: "rgb(150, 150, 150)",
+    ranged: "rgb(240, 236, 37)",
+    heal: "rgb(0, 255, 0)",
+}
+
 /**
  * @enum {string}
  */
@@ -199,7 +210,7 @@ const Damage_Display_Names = Object.freeze({
     fire: "Fire damage",
     frost: "Frost damage",
     lightning: "Lightning damage",
-    poison: 'Poison damage',
+    poison: "Poison damage",
     melee: "Melee damage",
     ranged: "Ranged damage",
 })
@@ -824,7 +835,7 @@ const fire_ball_spell = (favour) => {
                                 source_entity: context.source_entity,
                                 target_entity: entity,
                                 damage: {
-                                    amount: 30,
+                                    amount: action.damage,
                                     type: Damage_Type.FIRE,
                                 }
                             })
@@ -847,12 +858,13 @@ const fire_ball_spell = (favour) => {
             }
         ],
         cooldown: ticks_per_second * 5,
-        cooldown_date: tick_counter - ticks_per_second * 1,
+        cooldown_date: tick_counter - ticks_per_second * 5,
         image: fire_ball_image,
         mana_cost: 10,
         range: 10,
         hit_cells: 3,
         speed: 8,
+        damage: 30,
 
     }
 }
@@ -1316,6 +1328,12 @@ const axe_equipment = (favour = 0) => {
         },
         multiplicative_stats: {
             attack_speed: 0.5 + 0.05 * Math.trunc(favour / 6 * Math.random()),
+        },
+        damage_modifiers: {
+            adds: {},
+            mults: {
+                melee: 2,
+            }
         },
         type: Equipment_Type.WEAPON,
         image: axe_image,
@@ -2691,6 +2709,32 @@ function damage_entity(combat_context) {
         time: 0,
     })
 
+    const text_color = Damage_Type_Colors[type];
+
+    visual_effects.push({
+        duration: ticks_per_second * 0.35,
+        x: target_entity.x,
+        y: target_entity.y,
+        draw_callback: (effect) => {
+            ctx.font = '20px "Press Start 2P"';
+            ctx.fillStyle = text_color;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            ctx.strokeStyle = 'rgb(40,40,40)'; // Farbe der Outline
+            ctx.lineWidth = 2;
+            const x = (effect.x + 0.5 + (Math.random() - 0.5) * 0.02) * cell_size;
+            const y = (effect.y - 0.3) * cell_size;
+            ctx.strokeText(resulting_amount.toFixed(0), x, y); // zuerst Outline
+            ctx.fillText(resulting_amount.toFixed(0), x, y);
+
+        },
+        peak_at: 0.2,
+        size: Math.max(1.5, resulting_amount / 10),
+        time: 0,
+        on_top: true
+    })
+
     if (target_entity.stats.current_hp <= 0)
     {
         entity_on_kill(combat_context);
@@ -2724,10 +2768,39 @@ function affect_entity(combat_context) {
 /** @type {(combat_context: Combat_Context)} */
 function heal_entity(combat_context) {
     const target_entity = combat_context.target_entity;
-    target_entity.stats.current_hp += combat_context.damage.amount;
+
+    let resulting_amount = combat_context.damage.amount;
+
+    target_entity.stats.current_hp += resulting_amount;
     if (target_entity.stats.current_hp > target_entity.stats.max_hp) target_entity.stats.current_hp = target_entity.stats.max_hp;
 
     entity_on_heal(combat_context);
+
+    const text_color = Damage_Type_Colors.heal;
+
+    visual_effects.push({
+        duration: ticks_per_second * 0.35,
+        x: target_entity.x,
+        y: target_entity.y,
+        draw_callback: (effect) => {
+            ctx.font = '20px "Press Start 2P"';
+            ctx.fillStyle = text_color;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            ctx.strokeStyle = 'rgb(40,40,40)'; // Farbe der Outline
+            ctx.lineWidth = 2;
+            const x = (effect.x + 0.5 + (Math.random() - 0.5) * 0.02) * cell_size;
+            const y = (effect.y - 0.3) * cell_size;
+            ctx.strokeText(resulting_amount.toFixed(0), x, y); // zuerst Outline
+            ctx.fillText(resulting_amount.toFixed(0), x, y);
+
+        },
+        peak_at: 0.2,
+        size: Math.max(1.5, resulting_amount / 10),
+        time: 0,
+        on_top: true
+    })
 
 }
 
@@ -2857,8 +2930,8 @@ function entities_inside_rect(x1, y1, x2, y2) {
 //#endregion -----------------------------------------------------------------------
 //#region ------------------------- Render -----------------------------------------
 
-let cell_size = /* 320; */ 80;
-let cell_margin = /* 32; */ 8;
+let cell_size = /* 320; */ 60;
+let cell_margin = /* 32; */ 6;
 let zoom = cell_size / 40.0;
 const camera_origin = /* [20, 20] */[canvas.width / 2, canvas.height / 2];
 const camera_speed = 7;
@@ -3512,6 +3585,7 @@ function draw(time) {
         strings["cooldown"] = "" + (Action_Display_Names["cooldown"]) + ": " + (action.cooldown / ticks_per_second).toFixed(1);
         strings["mana_cost"] = "" + (Action_Display_Names["mana_cost"]) + ": " + action.mana_cost.toFixed(1);
         strings["type"] = "" + (Action_Display_Names["type"]) + ": " + action.type;
+        strings["damage"] = "" + (Action_Display_Names["damage"]) + ": " + action.damage.toFixed(0);
 
         const str_keys = Object.keys(strings);
         for (let i = 0; i < str_keys.length; i++)
@@ -3606,7 +3680,7 @@ function draw(time) {
                     if (!strings[key])
                     {
                         strings[key] = "" + (Damage_Display_Names[key]) + ": "
-                        strings[key] += ((value - 1) * 100).toFixed(1) + "%";
+                        strings[key] += (value > 0 ? "+" : "") + ((value - 1) * 100).toFixed(1) + "%";
                     }
                 })
 
