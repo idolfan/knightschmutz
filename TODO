@@ -1,20 +1,13 @@
-Fixes: -----------------------------------------
-- possible weird right click behaviour ( stucking player & melee enemy, with one space in between)
+-------------------- Fixes ------------------
 - enemy abrupt movement visuals
-Features: --------------------------------------
-- PROTECTING ( Defending ?) phase
-- World generation ( structures with chests & enemies ) |
-  -> Protecting phase for spawned enemies
-- armor / dmg reduction system
+
+-------------------- Features ---------------
+- dmg reduction system
 - auto mob spawning
 - increase map size
-- effects on equipment + hover info about it in inventory
-- hover on enemies info hud element
+- hover info about effects on equipment in inventory
 - test mode ( for game init, maybe with hotkey during loading)
-- Status Effects ( Freezing , wet -> rain?, ..)
-- "Base damage" ? vielleicht eher unterteilung ( melee, range, spell, ..)
-
-- WINDOWS + V
+- enemy aggro
 
 ---------------------------------
 - Actual plan for stats ( balancing )
@@ -30,3 +23,14 @@ Idee 1:
   - HP: 2*
 - squishy Gegner:
   - HP: 0.2* 
+
+------------------- Sounds ---------------
+- Schwert
+- Axt
+- Brennen
+- Explosion
+- Regen
+- Erdboden kracken
+- Grollen
+- Damage sound gegen Rüstung ( Metall )
+- Damage sound gegen Körper

@@ -90,7 +90,43 @@ const fire_ball_trail_1_image = new Image();
 fire_ball_trail_1_image.src = './images/fire_ball_trail_1.png';
 const fire_ball_trail_2_image = new Image();
 fire_ball_trail_2_image.src = './images/fire_ball_trail_2.png';
+const equipped_slot_image = new Image();
+equipped_slot_image.src = './images/directed_slot.png';
 
+//#region -------------------------- Sounds ----------------------------------------
+let audioContext = new (window.AudioContext || window.webkitAudioContext)();
+let gainNode = audioContext.createGain();
+
+document.addEventListener('click', () => {
+    if (audioContext.state === 'suspended')
+    {
+        audioContext.resume();
+    }
+}, { once: true });
+
+gainNode.gain.value = 0.02;
+
+/** @type {(buffer: AudioBuffer, loop: boolean) => AudioBufferSourceNode} */
+function play_sound(buffer, loop = false) {
+    if (!buffer) return;
+
+    const source = audioContext.createBufferSource();
+    source.buffer = buffer;
+    source.loop = loop;
+    source.connect(gainNode).connect(audioContext.destination);
+    source.start(0);
+
+    return source;
+}
+
+let test_audio_buffer = null;
+fetch('sounds/monk.mp3')
+    .then(response => response.arrayBuffer())
+    .then(data => audioContext.decodeAudioData(data))
+    .then(buffer => {
+        test_audio_buffer = buffer;
+    });
+//#endregion -----------------------------------------------------------------------
 //#endregion -----------------------------------------------------------------------
 //#region ----------------------- Constants ----------------------------------------
 
@@ -99,7 +135,8 @@ const Cell_Type = Object.freeze({
     WALL: 1,
     CHEST: 2,
     ENTITY: 3,
-    COBBLE_WALL: 4
+    COBBLE_WALL: 4,
+    WOODEN_FLOOR: 5,
 });
 
 const Stat_Display_Names = Object.freeze({
@@ -443,10 +480,10 @@ const bow_attack = (favour) => {
         name: "Bow attack",
         type: Action_Type.ATTACK,
         requirements: [in_range_requirement, not_self_requirement, attack_timer_up_requirement],
-        effect_functions: [(context) => {
+        effect_functions: [(context, action) => {
             const combat_context = {
                 ...context,
-                damage: { amount: 8, type: Damage_Type.RANGED }
+                damage: { amount: action.damage, type: Damage_Type.RANGED }
             }
             context.source_entity.attack_timer = 0;
             const distance = entity_distance(context.source_entity, context.target_entity);
@@ -492,6 +529,7 @@ const bow_attack = (favour) => {
             visual_effects.push(visual_effect);
         }],
         range: 7,
+        damage: 8,
     }
 }
 
@@ -727,7 +765,7 @@ const fire_rain_spell = (favour) => {
                                                     source_entity: con.source_entity,
                                                     target_entity: entity,
                                                     damage: {
-                                                        amount: 10,
+                                                        amount: action.damage,
                                                         type: Damage_Type.FIRE,
                                                     }
                                                 })
@@ -756,7 +794,8 @@ const fire_rain_spell = (favour) => {
         radius: 8,
         hit_cells: 3,
         per_second: 2,
-        per_duration: 2.5
+        per_duration: 2.5,
+        damage: 10
     }
 }
 
@@ -935,7 +974,7 @@ const aimed_arrow_attack = (favour) => {
                                 source_entity: context.source_entity,
                                 target_entity: entity,
                                 damage: {
-                                    amount: 30,
+                                    amount: action.damage,
                                     type: Damage_Type.FIRE,
                                 }
                             })
@@ -960,7 +999,7 @@ const aimed_arrow_attack = (favour) => {
         range: 10,
         hit_cells: 1,
         speed: 24,
-
+        damage: 12,
     }
 }
 
@@ -992,6 +1031,15 @@ const action_slot_info = {
     width: canvas.height / 12,
     height: canvas.height / 12,
     slot_distances: [10, 0],
+}
+
+/** @type {Slot_Info} */
+const equipped_slot_info = {
+    image: equipped_slot_image,
+    zone_margin: [9 / 40, 5 / 32, 9 / 40, 5 / 32],
+    width: canvas.height / 11 * 40 / 32,
+    height: canvas.height / 11,
+    slot_distances: [-1, 10]
 }
 
 
@@ -1084,7 +1132,7 @@ function load() {
             inventory_margins, default_slot_info),
         create_inventory_zone(player_entity.equipped_items, equipped_slots_image,
             [0, (1 - 1 / 6.769) * canvas.height, null, canvas.height],
-            [5 / 313, 5 / 26, 5 / 313, 5 / 26], default_slot_info),
+            [5 / 313, 5 / 26, 5 / 313, 5 / 26], equipped_slot_info),
     ]
 
     info_zone_boundaries = calculate_zone_boundaries(info_image, info_boundaries, info_margins);
@@ -1283,7 +1331,6 @@ const ruby_sword_equipment = (favour = 0) => {
     const mults = {};
     if (Math.random() < 0.25) adds.fire = Math.trunc(Math.random() * (6 + favour / 2));
     if (Math.random() < 0.25) mults.fire = 1 + (Math.trunc(Math.random() * (25 + favour))) / 100;
-    console.log(adds, mults, favour);
 
     return {
         flat_stats: {
@@ -1759,18 +1806,18 @@ const red_melee_entity = (x, y, protecting) => {
             }
 
         },
-        equipped_items: {
+        /* equipped_items: {
             equipments: [
                 test_chestplate_equipment(0),
                 test_helmet_equipment(0),
             ],
             type: Inventory_Type.EQUIPPED,
-        }
+        } */
     }
 }
 
 /** @type {Create_Entity} */
-const red_bow_entity = (x, y) => {
+const red_bow_entity = (x, y, protecting) => {
     const bow_attack_instance = bow_attack();
     return {
         display_name: "Mean Red Top Triangle",
@@ -1786,7 +1833,7 @@ const red_bow_entity = (x, y) => {
         enemy_type: Enemy_Type.RED_BOW,
         basic_attack: bow_attack_instance,
         weapon: test_bow_equipment(),
-        phase: Phase.WANDERING,
+        phase: protecting ? Phase.PROTECTING : Phase.WANDERING,
         phase_states: {
             chasing: {
                 action: bow_attack_instance,
@@ -1799,13 +1846,17 @@ const red_bow_entity = (x, y) => {
             kiting: {
 
             },
+            protecting: {
+                max_distance: 10,
+                range: 10,
+            }
         }
 
     }
 }
 
 /** @type {Create_Entity} */
-const red_mage_entity = (x, y) => {
+const red_mage_entity = (x, y, protecting) => {
     const spike_spell_instance = spike_spell();
 
     return {
@@ -1822,7 +1873,7 @@ const red_mage_entity = (x, y) => {
         attack_timer: ticks_per_second,
         enemy_type: Enemy_Type.RED_MAGE,
         actions: [spike_spell_instance],
-        phase: Phase.WANDERING,
+        phase: protecting ? Phase.PROTECTING : Phase.WANDERING,
         phase_states: {
             chasing: {
                 action: spike_spell_instance,
@@ -1835,6 +1886,10 @@ const red_mage_entity = (x, y) => {
             kiting: {
 
             },
+            protecting: {
+                max_distance: 10,
+                range: 10,
+            }
         }
 
     }
@@ -1946,6 +2001,106 @@ const structures = {
                 fill_cells([x, i - margin], [x + margin, i], Cell_Type.COBBLE_WALL);
             }
 
+            const longhouse_width = 20;
+            const longhouse_y_dist = 10;
+            const longhouse_p1 = [x + this.width / 2 - longhouse_width / 2, y + longhouse_y_dist];
+            const longhouse_p2 = [x + this.width / 2 + longhouse_width / 2, y + this.height - longhouse_y_dist];
+
+            const longhouse_door_p1 = [x + this.width / 2 - 1, y + this.height - longhouse_y_dist - 2];
+            const longhouse_door_p2 = [x + this.width / 2 + 1, y + this.height - longhouse_y_dist];
+
+            const left_housing_area_p1 = [
+                x + margin + wall_thickness + 1,
+                y + margin + wall_thickness + 1,
+            ];
+            const left_housing_area_p2 = [
+                x + this.width / 2 - longhouse_width / 2 - 1,
+                y + this.height - margin - wall_thickness - 1,
+            ];
+
+            fill_cells(left_housing_area_p1, left_housing_area_p2, Cell_Type.EMPTY);
+
+
+            // Housing
+            const house_height = 6;
+            const house_width = 9;
+
+            let temp_y = left_housing_area_p1[1];
+
+            while (temp_y < left_housing_area_p2[1] - house_height)
+            {
+                const p1 = [left_housing_area_p1[0], temp_y];
+                const p2 = [left_housing_area_p1[0] + house_width, temp_y + house_height];
+                fill_cells(p1, p2, Cell_Type.WOODEN_FLOOR); // Floor
+                fill_frame_cells(p1[0], p1[1], p2[0], p2[1], 1, Cell_Type.COBBLE_WALL); // Walls
+
+                area_board[p2[0] - 1][Math.floor(p1[1] + house_height / 2)] = Cell_Type.EMPTY; // Entry
+                temp_y += house_height + 1 + Math.floor(Math.random() * 11);
+
+                if (Math.random() > 0.5)
+                {
+                    /** @type {Inventory} */
+                    const inventory = {
+                        type: Inventory_Type.OTHER,
+                        equipments: add_equipments_from_table(null, loot_tables.standard_chest, loot_table_sums.get(loot_tables.standard_chest) * 3, 3, 0),
+                    }
+                    const x = p1[0] + 1;
+                    const y = p1[1] + 1;
+                    chest_inventories.set(x + " " + y, inventory); // Upper chest
+                }
+
+                if (Math.random() > 0.5)
+                {
+                    /** @type {Inventory} */
+                    const inventory = {
+                        type: Inventory_Type.OTHER,
+                        equipments: add_equipments_from_table(null, loot_tables.standard_chest, loot_table_sums.get(loot_tables.standard_chest) * 3, 3, 0),
+                    }
+                    const x = p1[0] + 1;
+                    const y = p2[1] - 2;
+                    chest_inventories.set(x + " " + y, inventory); // Lower chest
+                }
+
+                for (let i = p1[0] + 1; i < p2[0] - 1; i++)
+                {
+                    for (let j = p1[1] + 1; j < p2[1] - 1; j++)
+                    {
+                        if (Math.random() < 0.08)
+                        {
+                            const type_random = Math.random();
+                            const enemy = type_random < 0.2 ? red_mage_entity(i, j, true)
+                                : type_random < 0.5 ? red_bow_entity(i, j, true)
+                                    : red_melee_entity(i, j, true);
+
+                            add_entity(enemy);
+                        }
+                    }
+                }
+            }
+
+            // Longhouse
+            fill_cells(longhouse_p1, // Floor
+                longhouse_p2,
+                Cell_Type.WOODEN_FLOOR);
+
+            fill_frame_cells(longhouse_p1[0], // Walls
+                longhouse_p1[1],
+                longhouse_p2[0],
+                longhouse_p2[1],
+                2, Cell_Type.COBBLE_WALL);
+
+            fill_cells(longhouse_door_p1, // Door
+                longhouse_door_p2,
+                Cell_Type.EMPTY);
+
+            const longhouse_door_enemies = [
+                red_knight_entity(x, y, true),
+                red_knight_entity(x, y, true),
+            ]
+
+            place_other_cells(replace_with_entities(this.door_other_cells(), longhouse_door_enemies), longhouse_door_p1[0] - 1, longhouse_door_p1[1] - 1);
+
+
             const entrance_x = x - this.entrance_cells[0].length / 2 + this.width / 2;
             const entrance_y = y + this.height - this.entrance_cells.length;
             const entrance_enemies = [
@@ -1976,7 +2131,12 @@ const structures = {
             [0, 0, 3, 0, 0, 3, 0, 0],
             [0, 0, 0, 0, 0, 0, 0, 0],
             [0, 0, 0, 0, 0, 0, 0, 0],
-
+        ],
+        door_other_cells: () => [
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [3, 0, 0, 3],
         ],
         horizontal_wall_cells: [
             [4, 4, 4, 4, 4, 4, 4],
@@ -1987,8 +2147,8 @@ const structures = {
             [4, 4],
             [4, 4]
         ],
-        width: 50,
-        height: 50,
+        width: 66,
+        height: 66,
         weight: 0,
     }
 }
@@ -2097,7 +2257,6 @@ function place_cells(cells, x, y) {
             const value = cells[i][j];
             if (value.slot_count)
             {
-                area_board[j + x][i + y] = Cell_Type.CHEST;
                 chest_inventories.set((j + x) + " " + (i + y), value);
             } else if (value.enemy_type != null)
             {
@@ -2125,6 +2284,13 @@ function fill_cells(p1, p2, value) {
     }
 }
 
+function fill_frame_cells(x1, y1, x2, y2, thickness, value) {
+    fill_cells([x1, y1], [x2, y1 + thickness], value);
+    fill_cells([x1, y2 - thickness], [x2, y2], value);
+    fill_cells([x1, y1], [x1 + thickness, y2], value);
+    fill_cells([x2 - thickness, y1], [x2, y2], value);
+}
+
 /** @type {(cells: Cells, x: number, y: number)} */
 function place_other_cells(cells, x, y) {
     for (let i = 0; i < cells.length; i++)
@@ -2135,7 +2301,6 @@ function place_other_cells(cells, x, y) {
             const value = cells[i][j];
             if (value.slot_count)
             {
-                area_board[j + x][i + y] = Cell_Type.CHEST;
                 chest_inventories.set((j + x) + " " + (i + y), value);
             } else if (value.enemy_type != null)
             {
@@ -2229,7 +2394,7 @@ function add_equipments_from_table(equipments, table, sum, count, favour) {
     return equipments;
 }
 
-const do_world_generation = true;
+const do_world_generation = false;
 
 // World generation
 area_board = Array.from({ length: world_area_size }, () => Array(world_area_size).fill(Cell_Type.EMPTY));
@@ -2238,11 +2403,10 @@ for (let i = 0; i < (do_world_generation ? world_area_size : 0); i++)
     for (let j = 0; j < world_area_size; j++)
     {
         const random = Math.random();
-        area_board[i][j] = random > 0.66 ? Cell_Type.WALL
-            : random > 0.003 ? Cell_Type.EMPTY
-                : Cell_Type.CHEST;
+        area_board[i][j] = random > 0.72 ? Cell_Type.WALL
+            : Cell_Type.EMPTY;
 
-        if (area_board[i][j] == Cell_Type.CHEST)
+        if (random <= 0.03) // Chest
         {
             const equipments = [];
 
@@ -2366,7 +2530,7 @@ mark_structure_cells(castle_structure, castle_pos[0], castle_pos[1], 0);
 
     /** @type {Array<Entity>} */
     const start_entities = [
-        red_knight_entity(20, 20),
+        // red_knight_entity(20, 20),
         /* red_melee_entity(30, 30),
         red_melee_entity(40, 40),
         red_bow_entity(30, 40),
@@ -2735,6 +2899,8 @@ function damage_entity(combat_context) {
         on_top: true
     })
 
+    //play_sound(test_audio_buffer);
+
     if (target_entity.stats.current_hp <= 0)
     {
         entity_on_kill(combat_context);
@@ -3095,9 +3261,6 @@ function draw(time) {
                 let color = 'rgb(64, 64, 64, 1)'
                 ctx.fillStyle = 'black';
                 ctx.fillRect(i * cell_size, j * cell_size + cell_size / 2, cell_size, 0.5 * cell_size);
-            } else if (area_board[i][j] === Cell_Type.CHEST)
-            {
-                ctx.drawImage(chest_image, i * cell_size, j * cell_size, cell_size, cell_size);
             } else if (area_board[i][j] === Cell_Type.EMPTY)
             {
                 ctx.fillStyle = 'rgb(0, 128, 40, 0.2)'
@@ -3118,6 +3281,26 @@ function draw(time) {
                 ctx.fillRect(i * cell_size, j * cell_size + cell_size / 2, gap / 2, cell_size / 2); // Left vertical Gap
                 ctx.fillRect(i * cell_size + cell_size - gap / 2, j * cell_size + cell_size / 2, gap / 2, cell_size / 2); // Right vertical Gap
 
+            }
+            else if (area_board[i][j] === Cell_Type.WOODEN_FLOOR)
+            {
+                const gap = 1 * cell_size / 40;
+                let color = 'rgb(94, 49, 8)'
+                ctx.fillStyle = color;
+                ctx.fillRect(i * cell_size, j * cell_size, cell_size, cell_size); // Background
+                const gap_color = 'black';
+                ctx.fillStyle = gap_color;
+                ctx.fillRect(i * cell_size, j * cell_size, cell_size, gap / 2); // Top gap
+                ctx.fillRect(i * cell_size, j * cell_size + cell_size - gap / 2, cell_size, gap / 2); // Bottom gap
+                ctx.fillRect(i * cell_size, j * cell_size + cell_size / 2 - gap / 2, cell_size, gap); // Middle horizontal Gap
+                ctx.fillRect(i * cell_size + cell_size / 2 - gap / 2, j * cell_size, gap, cell_size / 2); // Middle vertical Gap
+                ctx.fillRect(i * cell_size, j * cell_size + cell_size / 2, gap / 2, cell_size / 2); // Left vertical Gap
+                ctx.fillRect(i * cell_size + cell_size - gap / 2, j * cell_size + cell_size / 2, gap / 2, cell_size / 2); // Right vertical Gap
+
+            }
+            if (chest_inventories.has(i + " " + j))
+            {
+                ctx.drawImage(chest_image, i * cell_size, j * cell_size, cell_size, cell_size);
             }
         }
     }
@@ -3303,6 +3486,7 @@ function draw(time) {
 
     }
 
+    // Draw cells 2
     for (let i = right_most_cell; i >= left_most_cell; i--)
     {
         for (let j = up_most_cell; j < down_most_cell; j++)
@@ -3313,9 +3497,6 @@ function draw(time) {
                 let color = `rgb(64, 64, 64, ${alpha})`;
                 ctx.fillStyle = color;
                 ctx.fillRect(i * cell_size, (j - 0.5) * cell_size, cell_size, cell_size);
-            } else if (area_board[i][j] === Cell_Type.CHEST)
-            {
-
             } else if (area_board[i][j] === Cell_Type.EMPTY)
             {
 
@@ -3844,7 +4025,7 @@ function draw(time) {
             if (!strings[key] && Damage_Display_Names[key] != null && (add_value != 0 || mult_value != 1))
             {
                 strings[key] = "" + (Damage_Display_Names[key]) + ": "
-                strings[key] += ((mult_value - 1) * 100).toFixed(1) + "%" + " | " + (add_value > 0 ? "+" : "") + add_value.toFixed(1);
+                strings[key] += (mult_value - 1 > 0 ? "+" : "") + ((mult_value - 1) * 100).toFixed(1) + "%" + " | " + (add_value > 0 ? "+" : "") + add_value.toFixed(1);
             }
         })
 
@@ -3905,7 +4086,7 @@ function draw_equipped_items(entity, x, y, zoom) {
     /** @type {Set<HTMLImageElement} */
     const images = new Set();
 
-    for (let j = 0; j < entity.equipped_items.equipments.length; j++)
+    for (let j = 0; j < entity.equipped_items?.equipments.length || 0; j++)
     {
         const equipment = entity.equipped_items.equipments[j];
         if (equipment?.image)
@@ -3990,7 +4171,6 @@ function draw_rain() {
     }
 
 }
-
 //#endregion -----------------------------------------------------------------------
 //#region --------------------- Input handling -------------------------------------
 
@@ -4104,7 +4284,7 @@ function handle_inputs() {
         } else
         {
             const path_steps = calculate_path_positions([player_entity.next_x, player_entity.next_y], clicked_cell);
-
+            // console.log("ps", path_steps)
             if (path_steps != null) change_path(player_entity, path_steps);
         }
 
@@ -4186,7 +4366,6 @@ function handle_inputs() {
                 break right_mouse_button;
             }
 
-
             player_entity.phase = Phase.CHASING;
             player_entity.phase_states.chasing.action = player_entity.basic_attack;
             player_entity.phase_states.chasing.target = target_entity;
@@ -4202,7 +4381,7 @@ function handle_inputs() {
             inventory_zones[0].visible = false;
             inventory_zones[1].visible = false;
             inventory_zones[2].visible = false;
-        } else if (cell == Cell_Type.CHEST)
+        } else if (chest_inventories.has(player_entity.x + " " + player_entity.y)) // Chest
         {
             opened_inventory = chest_inventories.get(player_entity.x + " " + player_entity.y);
 
@@ -4911,7 +5090,7 @@ function calculate_path_positions(start, end, with_entities) {
         {
             const [nx, ny] = [x + dx, y + dy];
             if ((nx >= 0 && nx < cols && ny >= 0 && ny < rows) // in bounds
-                && (area_board[nx][ny] === Cell_Type.EMPTY || area_board[nx][ny] === Cell_Type.CHEST) // walkable
+                && (area_board[nx][ny] === Cell_Type.EMPTY || area_board[nx][ny] === Cell_Type.WOODEN_FLOOR) // walkable
                 && ((end[0] == nx && end[1] == ny) || !with_entities || !entity_positions[nx][ny])) // not_blocked
             {
                 const key = posToStr([nx, ny]);
