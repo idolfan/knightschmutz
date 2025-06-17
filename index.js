@@ -256,7 +256,7 @@ const Damage_Display_Names = Object.freeze({
 //#region ----------------------- Game state ---------------------------------------
 
 const ticks_per_second = 60;
-const world_area_size = 100;
+const world_area_size = 1000;
 
 let id_counter = 0;
 let tick_counter = 0;
@@ -424,7 +424,7 @@ const cost_mana = (context, action) => {
 }
 
 /** @type {Create_Action} */
-const melee_attack = (favour) => {
+const melee_attack = (favour = 0) => {
     return {
         name: "Melee attack",
         type: Action_Type.ATTACK,
@@ -440,14 +440,14 @@ const melee_attack = (favour) => {
             const visual_effect = {
                 duration: ticks_per_second * 0.2,
                 time: 0,
-                x: context.source_entity.visual_x,
-                y: context.source_entity.visual_y,
-                destination: [context.target_entity.visual_x, context.target_entity.visual_y],
+                cell_x: context.source_entity.x_p,
+                cell_y: context.source_entity.y_p,
+                destination: [context.target_entity.x_p, context.target_entity.y_p],
                 on_top: true,
                 peak_at: 0.5,
                 draw_callback: (effect) => {
-                    const direction_x = effect.destination[0] - effect.x;
-                    const direction_y = effect.destination[1] - effect.y;
+                    const direction_x = (effect.destination[0] - effect.cell_x) * cell_size;
+                    const direction_y = (effect.destination[1] - effect.cell_y) * cell_size;
                     const distance = Math.sqrt(direction_x * direction_x + direction_y * direction_y);
                     const passed_time = effect.time / effect.duration;
 
@@ -455,7 +455,7 @@ const melee_attack = (favour) => {
 
                     const p2 = [Math.cos(angle), Math.sin(angle)];
 
-                    const p1 = [effect.x + cell_size / 2, effect.y + cell_size / 2];
+                    const p1 = [effect.cell_x * cell_size + cell_size / 2, effect.cell_y * cell_size + cell_size / 2];
 
                     ctx.beginPath();
                     ctx.strokeStyle = "rgb(200,200,200, 0.8)";
@@ -475,7 +475,7 @@ const melee_attack = (favour) => {
 }
 
 /** @type {Create_Action} */
-const bow_attack = (favour) => {
+const bow_attack = (favour = 0) => {
     return {
         name: "Bow attack",
         type: Action_Type.ATTACK,
@@ -502,27 +502,28 @@ const bow_attack = (favour) => {
                 duration: ticks_per_second * 0.025 * distance,
                 size: 1,
                 time: 0,
-                x: context.source_entity.x,
-                y: context.source_entity.y,
-                destination: [context.target_entity.x, context.target_entity.y],
+                cell_x: context.source_entity.x_p,
+                cell_y: context.source_entity.y_p,
+                destination: [context.target_entity.x_p, context.target_entity.y_p],
                 draw_callback: (effect) => {
-                    const direction_x = effect.destination[0] - effect.x;
-                    const direction_y = effect.destination[1] - effect.y;
+                    const direction_x = effect.destination[0] - effect.cell_x;
+                    const direction_y = effect.destination[1] - effect.cell_y;
                     const distance = Math.sqrt(direction_x * direction_x + direction_y * direction_y);
                     const remaining_time = effect.duration - effect.time;
                     ctx.strokeStyle = "rgb(127,51,0)";
                     ctx.lineWidth = 5;
-                    ctx.moveTo(effect.x * cell_size, effect.y * cell_size);
-                    ctx.lineTo((effect.x + direction_x / distance) * cell_size, (effect.y + direction_y / distance) * cell_size);
+                    console.log(effect);
+                    ctx.moveTo(effect.cell_x * cell_size, effect.cell_y * cell_size);
+                    ctx.lineTo((effect.cell_x + direction_x / distance) * cell_size, (effect.cell_y + direction_y / distance) * cell_size);
                     ctx.stroke();
                     ctx.beginPath();
                 },
                 tick_callback: (effect) => {
-                    const direction_x = effect.destination[0] - effect.x;
-                    const direction_y = effect.destination[1] - effect.y;
+                    const direction_x = effect.destination[0] - effect.cell_x;
+                    const direction_y = effect.destination[1] - effect.cell_y;
                     const remaining_time = effect.duration - effect.time;
-                    effect.x += direction_x / remaining_time;
-                    effect.y += direction_y / remaining_time;
+                    effect.cell_x += direction_x / remaining_time;
+                    effect.cell_y += direction_y / remaining_time;
                 }
             }
 
@@ -534,7 +535,7 @@ const bow_attack = (favour) => {
 }
 
 /** @type {Create_Action} */
-const heal_spell = (favour) => {
+const heal_spell = (favour = 0) => {
     return {
         name: "Heal",
         type: Action_Type.SPELL,
@@ -557,7 +558,7 @@ const heal_spell = (favour) => {
 }
 
 /** @type {Create_Action} */
-const hammer_spell = (favour) => {
+const hammer_spell = (favour = 0) => {
     return {
         name: "Destruct",
         type: Action_Type.SPELL,
@@ -578,7 +579,7 @@ const hammer_spell = (favour) => {
 }
 
 /** @type {Create_Action} */
-const construct_spell = (favour) => {
+const construct_spell = (favour = 0) => {
     return {
         name: "Construct",
         type: Action_Type.SPELL,
@@ -598,7 +599,7 @@ const construct_spell = (favour) => {
 }
 
 /** @type {Create_Action} */
-const spike_spell = (favour) => {
+const spike_spell = (favour = 0) => {
     return {
         name: "Spike spell",
         type: Action_Type.SPELL,
@@ -618,8 +619,8 @@ const spike_spell = (favour) => {
                                 duration: ticks_per_second * 0.35,
                                 size: 1,
                                 time: 0,
-                                x: cell[0],
-                                y: cell[1],
+                                cell_x: cell[0],
+                                cell_y: cell[1],
                                 image: spike_image,
                                 peak_at: 0.2,
 
@@ -651,7 +652,7 @@ const spike_spell = (favour) => {
 }
 
 /** @type {Create_Action} */
-const freeze_spell = (favour) => {
+const freeze_spell = (favour = 0) => {
     return {
         name: "Freeze",
         type: Action_Type.SPELL,
@@ -673,8 +674,8 @@ const freeze_spell = (favour) => {
                                 duration: ticks_per_second,
                                 size: 3,
                                 time: 0,
-                                x: cell[0],
-                                y: cell[1],
+                                cell_x: cell[0],
+                                cell_y: cell[1],
                                 image: freeze_image,
                                 peak_at: 0.2,
 
@@ -709,7 +710,7 @@ const freeze_spell = (favour) => {
 }
 
 /** @type {Create_Action} */
-const fire_rain_spell = (favour) => {
+const fire_rain_spell = (favour = 0) => {
     return {
         name: "Fire Rain",
         type: Action_Type.SPELL,
@@ -741,12 +742,12 @@ const fire_rain_spell = (favour) => {
                                     duration: ticks_per_second * action.per_duration,
                                     size: 32,
                                     time: 0,
-                                    x: cont.target_cell[0],
-                                    y: cont.target_cell[1],
+                                    cell_x: cont.target_cell[0],
+                                    cell_y: cont.target_cell[1],
                                     draw_callback: (effect) => {
                                         const remaining_perc = 1 - effect.time / effect.duration;
-                                        ctx.drawImage(fire_rain_image, effect.x * cell_size - to_sides * cell_size,
-                                            (effect.y - to_sides - 1) * cell_size - remaining_perc * canvas.height * 2, cell_size * size_c, cell_size * size_c);
+                                        ctx.drawImage(fire_rain_image, effect.cell_x * cell_size - to_sides * cell_size,
+                                            (effect.cell_y - to_sides - 1) * cell_size - remaining_perc * canvas.height * 2, cell_size * size_c, cell_size * size_c);
                                     },
                                 }
 
@@ -789,18 +790,18 @@ const fire_rain_spell = (favour) => {
         cooldown_date: tick_counter - ticks_per_second * 10,
         image: fire_rain_image,
         mana_cost: 10,
-        range: 10,
-        duration: 10,
-        radius: 8,
+        range: 10 + favour,
+        duration: 15,
+        radius: 8 + favour / 10,
         hit_cells: 3,
-        per_second: 2,
+        per_second: 3.5 * ((8 + favour / 7) / 8) * ((8 + favour / 7) / 8),
         per_duration: 2.5,
         damage: 10
     }
 }
 
 /** @type {Create_Action} */
-const fire_ball_spell = (favour) => {
+const fire_ball_spell = (favour = 0) => {
     return {
         name: "Fire Ball",
         type: Action_Type.SPELL,
@@ -833,34 +834,34 @@ const fire_ball_spell = (favour) => {
                     duration: ticks_per_second * duration,
                     size: 32,
                     time: 0,
-                    x: origin[0],
-                    y: origin[1],
+                    cell_x: origin[0],
+                    cell_y: origin[1],
 
                     draw_callback: (effect) => {
                         const passed_perc = effect.time / effect.duration;
                         if (passed_perc > 1) return;
 
-                        effect.x = origin[0] + direction[0] * passed_perc;
-                        effect.y = origin[1] + direction[1] * passed_perc;
+                        effect.cell_x = origin[0] + direction[0] * passed_perc;
+                        effect.cell_y = origin[1] + direction[1] * passed_perc;
 
                         // Trail 2
-                        ctx.drawImage(fire_ball_trail_2_image, (effect.x - to_sides - direction[0] / length * 0.4 * action.hit_cells) * cell_size,
-                            (effect.y - to_sides - direction[1] / length * 0.4 * action.hit_cells) * cell_size, cell_size * size_c, cell_size * size_c);
+                        ctx.drawImage(fire_ball_trail_2_image, (effect.cell_x - to_sides - direction[0] / length * 0.4 * action.hit_cells) * cell_size,
+                            (effect.cell_y - to_sides - direction[1] / length * 0.4 * action.hit_cells) * cell_size, cell_size * size_c, cell_size * size_c);
 
                         // Trail 1
-                        ctx.drawImage(fire_ball_trail_1_image, (effect.x - to_sides - direction[0] / length * 0.2 * action.hit_cells) * cell_size,
-                            (effect.y - to_sides - direction[1] / length * 0.2 * action.hit_cells) * cell_size, cell_size * size_c, cell_size * size_c);
+                        ctx.drawImage(fire_ball_trail_1_image, (effect.cell_x - to_sides - direction[0] / length * 0.2 * action.hit_cells) * cell_size,
+                            (effect.cell_y - to_sides - direction[1] / length * 0.2 * action.hit_cells) * cell_size, cell_size * size_c, cell_size * size_c);
 
 
                         // Fire ball
-                        ctx.drawImage(fire_ball_image, (effect.x - to_sides) * cell_size,
-                            (effect.y - to_sides) * cell_size, cell_size * size_c, cell_size * size_c);
+                        ctx.drawImage(fire_ball_image, (effect.cell_x - to_sides) * cell_size,
+                            (effect.cell_y - to_sides) * cell_size, cell_size * size_c, cell_size * size_c);
 
 
                     },
                     tick_callback: (effect) => {
-                        const x = effect.x;
-                        const y = effect.y;
+                        const x = effect.cell_x;
+                        const y = effect.cell_y;
                         const entities = entities_inside_rect(Math.floor(x), Math.floor(y), Math.ceil(x), Math.ceil(y));
 
                         let hit = false;
@@ -909,7 +910,7 @@ const fire_ball_spell = (favour) => {
 }
 
 /** @type {Create_Action} */
-const aimed_arrow_attack = (favour) => {
+const aimed_arrow_attack = (favour = 0) => {
     return {
         name: "Arrow shot",
         type: Action_Type.ATTACK,
@@ -941,26 +942,26 @@ const aimed_arrow_attack = (favour) => {
                     duration: ticks_per_second * duration,
                     size: 32,
                     time: 0,
-                    x: origin[0],
-                    y: origin[1],
+                    cell_x: origin[0],
+                    cell_y: origin[1],
                     destination: [origin[0] + direction[0], origin[1] + direction[1]],
                     draw_callback: (effect) => {
                         const passed_perc = effect.time / effect.duration;
                         if (passed_perc > 1) return;
 
-                        effect.x = origin[0] + direction[0] * passed_perc;
-                        effect.y = origin[1] + direction[1] * passed_perc;
+                        effect.cell_x = origin[0] + direction[0] * passed_perc;
+                        effect.cell_y = origin[1] + direction[1] * passed_perc;
 
                         ctx.strokeStyle = "rgb(127,51,0)";
                         ctx.lineWidth = 4 * zoom;
-                        ctx.moveTo(effect.x * cell_size, effect.y * cell_size);
-                        ctx.lineTo((effect.x + direction[0] / length * 0.4) * cell_size, (effect.y + direction[1] / length * 0.4) * cell_size);
+                        ctx.moveTo(effect.cell_x * cell_size, effect.cell_y * cell_size);
+                        ctx.lineTo((effect.cell_x + direction[0] / length * 0.4) * cell_size, (effect.cell_y + direction[1] / length * 0.4) * cell_size);
                         ctx.stroke();
                         ctx.beginPath();
                     },
                     tick_callback: (effect) => {
-                        const x = effect.x;
-                        const y = effect.y;
+                        const x = effect.cell_x;
+                        const y = effect.cell_y;
                         const entities = entities_inside_rect(Math.floor(x), Math.floor(y), Math.ceil(x), Math.ceil(y));
 
                         let hit = false;
@@ -1009,14 +1010,14 @@ const aoe_indicator_effect = (x, y, size, duration) => {
         duration: duration,
         size: size,
         time: 0,
-        x: (x + 0.5) * cell_size,
-        y: (y + 0.5) * cell_size,
+        cell_x: (x + 0.5),
+        cell_y: (y + 0.5),
         draw_callback: (effect) => {
             const rad = size * cell_size * 0.5 * (effect.time / effect.duration);
             ctx.fillStyle = "rgb(255, 0, 0, 0.4)";
-            ctx.fillRect(effect.x - rad, effect.y - rad, 2 * rad, 2 * rad);
+            ctx.fillRect(effect.cell_x * cell_size - rad, effect.cell_y * cell_size - rad, 2 * rad, 2 * rad);
             ctx.strokeStyle = "red";
-            ctx.strokeRect(effect.x - rad, effect.y - rad, 2 * rad, 2 * rad);
+            ctx.strokeRect(effect.cell_x * cell_size - rad, effect.cell_y * cell_size - rad, 2 * rad, 2 * rad);
         }
     }
 }
@@ -1140,7 +1141,7 @@ function load() {
     info_small_zone_boundaries = calculate_zone_boundaries(info_small_image, info_small_boundaries, info_small_margins);
     side_info_zone_boundaries = calculate_zone_boundaries(side_info_image, side_info_boundaries, side_info_margins);
 
-    init_action_slots();
+    init_action_slots(action_slots, action_slots_zone_boundaries, action_slots_count);
 
     loaded = true;
 
@@ -1540,9 +1541,8 @@ function init_slots(inventory_zone, inventory) {
     }
 }
 
-function init_action_slots() {
+function init_action_slots(slots, zone_boundaries, slot_count) {
     const slot_info = action_slot_info;
-    const zone_boundaries = action_slots_zone_boundaries;
     const slot_width = slot_info.width;
     const slot_height = slot_info.height;
     const slot_distances = slot_info.slot_distances;
@@ -1550,15 +1550,15 @@ function init_action_slots() {
 
     let slot_index = 0;
 
-    action_slots.length = 0;
+    slots.length = 0;
 
     for (let j = zone_boundaries[1]; j < zone_boundaries[3] - slot_height; j += slot_height + slot_distances[1])
     {
         for (let i = zone_boundaries[0]; i < zone_boundaries[2] - slot_width; i += slot_width + slot_distances[0])
         {
-            if (slot_index >= action_slots_count) break;
+            if (slot_index >= slot_count) break;
 
-            const action = player_entity.actions[slot_index];
+            const action = player_entity.equipped_actions[slot_index];
 
             /** @type {Action_Slot} */
             const slot = {
@@ -1575,7 +1575,7 @@ function init_action_slots() {
                 ],
             }
 
-            action_slots.push(slot);
+            slots.push(slot);
 
             slot_index++;
         }
@@ -1684,14 +1684,27 @@ function transfer_equipment(current_slot, new_slot, equipment) {
     }
 }
 
+/** @type {(current_slot: Action_Slot, new_slot: Action_Slot, action: Action)} */
+function transfer_action(current_slot, new_slot, action) {
+    const new_slot_action = new_slot.action;
+
+    if (current_slot)
+    {
+        current_slot.action = new_slot_action;
+    }
+
+    new_slot.action = action;
+    console.log("af", current_slot, new_slot);
+}
+
 /** @type {(inventory: Inventory)} */
 function close_inventory(inventory) {
     if (!inventory) return;
 
-    if (dragged_slot_zone)
+    if (dragged_slot)
     {
-        dragged_slot_zone.zone_boundaries = [...drag_start]
-        dragged_slot_zone = null;
+        dragged_slot.zone_boundaries = [...drag_start]
+        dragged_slot = null;
     }
 
     for (let i = 0; i < inventory_zones.length; i++)
@@ -1872,7 +1885,7 @@ const red_mage_entity = (x, y, protecting) => {
         },
         attack_timer: ticks_per_second,
         enemy_type: Enemy_Type.RED_MAGE,
-        actions: [spike_spell_instance],
+        equipped_actions: [spike_spell_instance],
         phase: protecting ? Phase.PROTECTING : Phase.WANDERING,
         phase_states: {
             chasing: {
@@ -1930,7 +1943,7 @@ const structures = {
         },
         standard_cells: [
             [1, 1, 1, 1, 1],
-            [1, 2, 0, 0, 1],
+            [1, 0, 0, 0, 1],
             [1, 0, 0, 0, 1],
             [1, 0, 0, 0, 1],
             [1, 1, 0, 1, 1],
@@ -1946,7 +1959,7 @@ const structures = {
         ],
         width: 6,
         height: 5,
-        weight: 1,
+        weight: 15,
     },
     castle: {
         create: function (x, y, angle) {
@@ -2149,7 +2162,7 @@ const structures = {
         ],
         width: 66,
         height: 66,
-        weight: 0,
+        weight: 1,
     }
 }
 
@@ -2388,13 +2401,13 @@ function add_equipments_from_table(equipments, table, sum, count, favour) {
     for (let i = 0; i < count; i++)
     {
         const equipment = roll_for_table(table, sum);
-        if (equipment) equipments.push(equipment(favour));
+        if (equipment) equipments.push(equipment(favour = 0));
     }
 
     return equipments;
 }
 
-const do_world_generation = false;
+const do_world_generation = true;
 
 // World generation
 area_board = Array.from({ length: world_area_size }, () => Array(world_area_size).fill(Cell_Type.EMPTY));
@@ -2406,7 +2419,7 @@ for (let i = 0; i < (do_world_generation ? world_area_size : 0); i++)
         area_board[i][j] = random > 0.72 ? Cell_Type.WALL
             : Cell_Type.EMPTY;
 
-        if (random <= 0.03) // Chest
+        if (random <= 0.001) // Chest
         {
             const equipments = [];
 
@@ -2461,12 +2474,18 @@ mark_structure_cells(castle_structure, castle_pos[0], castle_pos[1], 0);
 
     let failed_structures = 0;
 
+    const structure_keys = Object.keys(structures);
+
+    const spawned_structure_counts = [];
+
+    console.log('structure_weight_sum', structure_weight_sum)
+
     for (let i = 0; i < structure_atempts; i++)
     {
         const random = Math.random() * structure_weight_sum;
         let sum = 0;
         let j;
-        for (j = 0; j < structures_arr; j++)
+        for (j = 0; j < structures_arr.length; j++)
         {
             sum += structures_arr[j].weight;
             if (random < sum) break;
@@ -2482,6 +2501,7 @@ mark_structure_cells(castle_structure, castle_pos[0], castle_pos[1], 0);
         const y = Math.floor(Math.random() * (world_area_size - height));
 
         let can_place = true;
+
         for (let j = x; j < x + width; j++)
         {
             for (let k = y; k < y + height; k++)
@@ -2500,6 +2520,8 @@ mark_structure_cells(castle_structure, castle_pos[0], castle_pos[1], 0);
             continue;
         }
 
+        spawned_structure_counts[j] = (spawned_structure_counts[j] || 0) + 1;
+
         for (let j = x; j < x + width; j++)
         {
             for (let k = y; k < y + height; k++)
@@ -2514,6 +2536,11 @@ mark_structure_cells(castle_structure, castle_pos[0], castle_pos[1], 0);
     console.log("Spawned " + (structure_atempts - failed_structures) +
         " Structures out of " + structure_atempts +
         " (" + ((structure_atempts - failed_structures) / structure_atempts * 100).toFixed(1) + "%)");
+
+    for (let i = 0; i < structure_keys.length; i++)
+    {
+        console.log(structure_keys[i] + ": " + spawned_structure_counts[i])
+    }
 
 }
 
@@ -2712,9 +2739,9 @@ function add_player(player) {
     const player_entity = {
         display_name: player.display_name,
         x: 10,
-        y: 10,
+        y: 80,
         next_x: 10,
-        next_y: 10,
+        next_y: 80,
         path: {
             path_steps: [],
             progress: 0,
@@ -2737,13 +2764,13 @@ function add_player(player) {
         on_death: [],
         on_scored_hit: [],
         on_taken_hit: [],
-        actions: [
+        equipped_actions: [
             heal_spell(),
             hammer_spell(),
             construct_spell(),
             spike_spell(),
             freeze_spell(),
-            fire_rain_spell(),
+            fire_rain_spell(0),
             fire_ball_spell(),
         ],
         phase_states: {
@@ -2877,8 +2904,8 @@ function damage_entity(combat_context) {
 
     visual_effects.push({
         duration: ticks_per_second * 0.35,
-        x: target_entity.x,
-        y: target_entity.y,
+        cell_x: target_entity.x_p,
+        cell_y: target_entity.y_p,
         draw_callback: (effect) => {
             ctx.font = '20px "Press Start 2P"';
             ctx.fillStyle = text_color;
@@ -2887,8 +2914,8 @@ function damage_entity(combat_context) {
 
             ctx.strokeStyle = 'rgb(40,40,40)'; // Farbe der Outline
             ctx.lineWidth = 2;
-            const x = (effect.x + 0.5 + (Math.random() - 0.5) * 0.02) * cell_size;
-            const y = (effect.y - 0.3) * cell_size;
+            const x = (effect.cell_x + 0.5 + (Math.random() - 0.5) * 0.02) * cell_size;
+            const y = (effect.cell_y - 0.3) * cell_size;
             ctx.strokeText(resulting_amount.toFixed(0), x, y); // zuerst Outline
             ctx.fillText(resulting_amount.toFixed(0), x, y);
 
@@ -2946,8 +2973,8 @@ function heal_entity(combat_context) {
 
     visual_effects.push({
         duration: ticks_per_second * 0.35,
-        x: target_entity.x,
-        y: target_entity.y,
+        cell_x: target_entity.x_p,
+        cell_y: target_entity.y_p,
         draw_callback: (effect) => {
             ctx.font = '20px "Press Start 2P"';
             ctx.fillStyle = text_color;
@@ -2956,8 +2983,8 @@ function heal_entity(combat_context) {
 
             ctx.strokeStyle = 'rgb(40,40,40)'; // Farbe der Outline
             ctx.lineWidth = 2;
-            const x = (effect.x + 0.5 + (Math.random() - 0.5) * 0.02) * cell_size;
-            const y = (effect.y - 0.3) * cell_size;
+            const x = (effect.cell_x + 0.5 + (Math.random() - 0.5) * 0.02) * cell_size;
+            const y = (effect.cell_y - 0.3) * cell_size;
             ctx.strokeText(resulting_amount.toFixed(0), x, y); // zuerst Outline
             ctx.fillText(resulting_amount.toFixed(0), x, y);
 
@@ -3244,6 +3271,9 @@ function draw(time) {
             entity.path.visual_progress = 0;
             entity.path.progress = 0;
         }
+
+        entity.x_p = (entity.visual_x - cell_margin) / cell_size;
+        entity.y_p = (entity.visual_y - cell_margin) / cell_size;
     }
 
     // Draw cells
@@ -3322,7 +3352,9 @@ function draw(time) {
 
             const cell_middle = entity ?
                 [entity.visual_x + cell_size / 2, entity.visual_y + cell_size / 2]
-                : [visual_effect.x * cell_size + cell_size / 2, visual_effect.y * cell_size + cell_size / 2];
+                : visual_effect.x != null ?
+                    [visual_effect.x + cell_size / 2, visual_effect.y + cell_size / 2]
+                    : [visual_effect.cell_x * cell_size + cell_size / 2, visual_effect.cell_y * cell_size + cell_size / 2]
 
             const duration_percent = visual_effect.time / visual_effect.duration;
             const peak_at = visual_effect.peak_at;
@@ -3542,7 +3574,9 @@ function draw(time) {
 
             const cell_middle = entity ?
                 [entity.visual_x + cell_size / 2, entity.visual_y + cell_size / 2]
-                : [visual_effect.x * cell_size + cell_size / 2, visual_effect.y * cell_size + cell_size / 2];
+                : visual_effect.x != null ?
+                    [visual_effect.x + cell_size / 2, visual_effect.y + cell_size / 2]
+                    : [visual_effect.cell_x * cell_size + cell_size / 2, visual_effect.cell_y * cell_size + cell_size / 2]
 
             const duration_percent = visual_effect.time / visual_effect.duration;
             const peak_at = visual_effect.peak_at;
@@ -3726,9 +3760,9 @@ function draw(time) {
             line_height += 17;
         }
 
-        for (let i = 0; i < hovered_entity.actions?.length || 0; i++)
+        for (let i = 0; i < hovered_entity.equipped_actions?.length || 0; i++)
         {
-            const action = hovered_entity.actions[i];
+            const action = hovered_entity.equipped_actions[i];
             if (!action) continue;
 
             ctx.fillText(action.name, zone_b[0], line_height, zone_b[2] - zone_b[0]);
@@ -3766,7 +3800,7 @@ function draw(time) {
         strings["cooldown"] = "" + (Action_Display_Names["cooldown"]) + ": " + (action.cooldown / ticks_per_second).toFixed(1);
         strings["mana_cost"] = "" + (Action_Display_Names["mana_cost"]) + ": " + action.mana_cost.toFixed(1);
         strings["type"] = "" + (Action_Display_Names["type"]) + ": " + action.type;
-        strings["damage"] = "" + (Action_Display_Names["damage"]) + ": " + action.damage.toFixed(0);
+        if (action.damage) strings["damage"] = "" + (Action_Display_Names["damage"]) + ": " + action.damage.toFixed(0);
 
         const str_keys = Object.keys(strings);
         for (let i = 0; i < str_keys.length; i++)
@@ -3815,10 +3849,10 @@ function draw(time) {
         draw_image_boundaries(info_image, info_boundaries);
 
 
-        if (hovered_slot || dragged_slot_zone)
+        if (hovered_slot || dragged_slot)
         {
 
-            const equipment = hovered_slot?.equipment || dragged_slot_zone?.equipment;
+            const equipment = hovered_slot?.equipment || dragged_slot?.equipment;
             if (equipment)
             {
                 hovered_equipment = equipment;
@@ -3988,7 +4022,7 @@ function draw(time) {
                 }
             }
 
-            if (hovered_is_usefull && hovered_slot && !dragged_slot_zone)
+            if (hovered_is_usefull && hovered_slot && !dragged_slot)
             {
                 const boundaries = hovered_slot.zone_boundaries;
                 ctx.fillStyle = 'rgb(0,128,0,0.5)';
@@ -4055,8 +4089,8 @@ function draw(time) {
     ctx.fillText(player_entity?.path?.visual_mult, 40, 40); */
 
 
-    if (dragged_slot_zone)
-        draw_image_boundaries(dragged_slot_zone.equipment.image, dragged_slot_zone.zone_boundaries);
+    if (dragged_slot)
+        draw_image_boundaries(dragged_slot.equipment.image, dragged_slot.zone_boundaries);
 
 }
 
@@ -4184,7 +4218,10 @@ let hovered_slot;
 let hovered_action_slot;
 
 /** @type {Slot} */
-let dragged_slot_zone;
+let dragged_slot;
+
+/** @type {Action_Slot} */
+let dragged_action_slot;
 
 /** @type {Margins} */
 let drag_start;
@@ -4247,11 +4284,18 @@ function handle_inputs() {
             console.log('hovered', hovered_slot)
             if (hovered_slot && hovered_slot.equipment)
             {
-                dragged_slot_zone = hovered_slot;
-                console.log('start drag');
+                dragged_slot = hovered_slot;
+                console.log('start drag equipment');
                 drag_start = [...hovered_slot.zone_boundaries];
             }
             break left_mouse_button;
+        }
+
+        if (!inventory_zones[0].visible && hovered_action_slot)
+        {
+            dragged_action_slot = hovered_action_slot;
+            console.log('start drag action');
+            drag_start = [...hovered_action_slot.zone_boundaries];
         }
 
         const translation = [-camera_origin[0] * zoom + (canvas.width / 2), -camera_origin[1] * zoom + canvas.height / 2];
@@ -4292,20 +4336,29 @@ function handle_inputs() {
 
     if (keys_pressed.left_mouse_button)
     {
-        if (dragged_slot_zone)
+        if (dragged_slot)
         {
-            const boundaries = dragged_slot_zone.zone_boundaries;
+            const boundaries = dragged_slot.zone_boundaries;
             const zone_width = boundaries[2] - boundaries[0];
             const zone_height = boundaries[3] - boundaries[1];
             boundaries[0] = mouse_position[0] - zone_width / 2;
             boundaries[1] = mouse_position[1] - zone_height / 2;
             boundaries[2] = mouse_position[0] + zone_width / 2;
             boundaries[3] = mouse_position[1] + zone_height / 2;
-
+        }
+        if (dragged_action_slot)
+        {
+            const boundaries = dragged_action_slot.zone_boundaries;
+            const zone_width = boundaries[2] - boundaries[0];
+            const zone_height = boundaries[3] - boundaries[1];
+            boundaries[0] = mouse_position[0] - zone_width / 2;
+            boundaries[1] = mouse_position[1] - zone_height / 2;
+            boundaries[2] = mouse_position[0] + zone_width / 2;
+            boundaries[3] = mouse_position[1] + zone_height / 2;
         }
     } else if (!keys_pressed.left_mouse_button)
     {
-        if (dragged_slot_zone)
+        if (dragged_slot)
         {
             let moved = false;
             transfer_eq: for (let i = 0; i < inventory_zones.length; i++)
@@ -4321,9 +4374,9 @@ function handle_inputs() {
                         && mouse_position[1] > boundaries[1] && mouse_position[1] < boundaries[3];
                     if (mouse_inside)
                     {
-                        if (slot != dragged_slot_zone)
+                        if (slot != dragged_slot)
                         {
-                            transfer_equipment(dragged_slot_zone, slot, dragged_slot_zone.equipment);
+                            transfer_equipment(dragged_slot, slot, dragged_slot.equipment);
 
                             moved = true;
                             break transfer_eq;
@@ -4332,8 +4385,37 @@ function handle_inputs() {
                     }
                 }
             }
-            dragged_slot_zone.zone_boundaries = [...drag_start];
-            dragged_slot_zone = null;
+            dragged_slot.zone_boundaries = [...drag_start];
+            dragged_slot = null;
+            drag_start = [];
+
+        }
+
+        if (dragged_action_slot)
+        {
+            let moved = false;
+
+            transfer_ac: for (let j = 0; j < action_slots.length; j++)
+            {
+                const slot = action_slots[j];
+                const boundaries = slot.zone_boundaries;
+
+                const mouse_inside = mouse_position[0] > boundaries[0] && mouse_position[0] < boundaries[2]
+                    && mouse_position[1] > boundaries[1] && mouse_position[1] < boundaries[3];
+                if (mouse_inside)
+                {
+                    if (slot != dragged_action_slot)
+                    {
+                        transfer_action(dragged_action_slot, slot, dragged_action_slot.action);
+
+                        moved = true;
+                        break transfer_ac;
+                    }
+
+                }
+            }
+            dragged_action_slot.zone_boundaries = [...drag_start];
+            dragged_action_slot = null;
             drag_start = [];
 
         }
@@ -4560,13 +4642,16 @@ window.addEventListener('contextmenu', (event) => {
     event.preventDefault();
 });
 
+const max_zoom = 240;
+const min_zoom = 15;
+
 window.addEventListener("wheel", (event) => {
-    if (event.deltaY < 0 && cell_size < 320)
+    if (event.deltaY < 0 && cell_size < max_zoom)
     {
         cell_size *= 2;
         cell_margin *= 2;
         zoom = cell_size / 40.0;
-    } else if (event.deltaY > 0 && cell_size > 5)
+    } else if (event.deltaY > 0 && cell_size > min_zoom)
     {
         cell_size /= 2;
         cell_margin /= 2;
@@ -4653,12 +4738,20 @@ function tick() {
             visual_effect.tick_callback(visual_effect);
         } else
         {
-            if (visual_effect.destination)
+            if (visual_effect.destination && visual_effect.x != null)
             {
                 const direction = [visual_effect.destination[0] - visual_effect.x, visual_effect.destination[1] - visual_effect.y];
                 const remaining_time = (visual_effect.duration - visual_effect.time);
                 visual_effect.x += direction[0] / remaining_time;
                 visual_effect.y += direction[0] / remaining_time;
+            }
+
+            if (visual_effect.destination && visual_effect.cell_x != null)
+            {
+                const direction = [visual_effect.destination[0] - visual_effect.cell_x, visual_effect.destination[1] - visual_effect.cell_y];
+                const remaining_time = (visual_effect.duration - visual_effect.time);
+                visual_effect.cell_x += direction[0] / remaining_time;
+                visual_effect.cell_y += direction[0] / remaining_time;
             }
         }
     }
@@ -4867,7 +4960,7 @@ function process_enemy_ai() {
 
                 process_standard_chasing(entity);
 
-                const action = entity.actions[0];
+                const action = entity.equipped_actions[0];
                 const cooldown_up = tick_counter - action.cooldown_date >= action.cooldown;
 
                 const failed_action = try_action({ source_entity: entity, target_entity: closest_player_entity }, action);

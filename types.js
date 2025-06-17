@@ -25,8 +25,10 @@ const Entity_Type = {
  * @property {number} next_x - tracks x of first path element
  * @property {number} next_y - tracks y of first path element
  * @property {Path} path - currently used path
- * @property {number} visual_x
- * @property {number} visual_y
+ * @property {number} visual_x - pixel x of entity
+ * @property {number} visual_y - pixel y of entity
+ * @property {number} x_p - the x position measured in cells
+ * @property {number} y_p - the y position measured in cells
  * 
  * @property {Array<On_Combat_Calback>} on_death
  * @property {Array<On_Combat_Calback>} on_kill
@@ -49,7 +51,7 @@ const Entity_Type = {
  * @property {Inventory} inventory
  * @property {Action} basic_attack
  * @property {Equipment} weapon
- * @property {Array<Action>} actions
+ * @property {Array<Action>} equipped_actions
  * 
  * @property {Enemy_Type} enemy_type
  * @property {[x: number, y: number]} target_cell
@@ -225,6 +227,8 @@ const Entity_Type = {
  * @property {Entity} [entity]
  * @property {number} x - pixels
  * @property {number} y - pixels
+ * @property {number} cell_x
+ * @property {number} cell_y
  * @property {number} [peak_at] - percent visibility peak
  * @property {[x:number,y:number]} [destination]
  * @property {(effect: Visual_Effect)} [draw_callback]
