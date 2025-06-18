@@ -1,3 +1,5 @@
+const seed = Date.now();
+Math.random = createMulberry32(seed);
 //#region ------------------------ Canvas ------------------------------------------
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
@@ -3338,44 +3340,50 @@ function draw(time) {
     ctx.closePath();
     ctx.beginPath();
 
-    // Draw visual effects
-    for (let i = 0; i < visual_effects.length; i++)
-    {
+    function draw_visual_effects(on_top) {
 
-        const visual_effect = visual_effects[i];
-        if (visual_effect && !visual_effect.on_top)
+        // Draw visual effects
+        for (let i = 0; i < visual_effects.length; i++)
         {
-            const entity = visual_effect.entity;
 
-            const resulting_width = cell_size * visual_effect.size;
-            const resulting_height = cell_size * visual_effect.size;
-
-            const cell_middle = entity ?
-                [entity.visual_x + cell_size / 2, entity.visual_y + cell_size / 2]
-                : visual_effect.x != null ?
-                    [visual_effect.x + cell_size / 2, visual_effect.y + cell_size / 2]
-                    : [visual_effect.cell_x * cell_size + cell_size / 2, visual_effect.cell_y * cell_size + cell_size / 2]
-
-            const duration_percent = visual_effect.time / visual_effect.duration;
-            const peak_at = visual_effect.peak_at;
-
-            if (peak_at)
-                ctx.globalAlpha = (duration_percent > peak_at ? 1 - (duration_percent - peak_at) / (1 - peak_at)
-                    : duration_percent / peak_at)
-
-            if (visual_effect.draw_callback)
+            const visual_effect = visual_effects[i];
+            const display_now = on_top ? visual_effect.on_top : !visual_effect.on_top;
+            if (visual_effect && display_now)
             {
-                visual_effect.draw_callback(visual_effect);
-            } else
-            {
-                ctx.drawImage(visual_effect.image,
-                    cell_middle[0] - resulting_width / 2, cell_middle[1] - resulting_height / 2,
-                    resulting_width, resulting_height);
+                const entity = visual_effect.entity;
+
+                const resulting_width = cell_size * visual_effect.size;
+                const resulting_height = cell_size * visual_effect.size;
+
+                const cell_middle = entity ?
+                    [entity.visual_x + cell_size / 2, entity.visual_y + cell_size / 2]
+                    : visual_effect.x != null ?
+                        [visual_effect.x + cell_size / 2, visual_effect.y + cell_size / 2]
+                        : [visual_effect.cell_x * cell_size + cell_size / 2, visual_effect.cell_y * cell_size + cell_size / 2]
+
+                const duration_percent = visual_effect.time / visual_effect.duration;
+                const peak_at = visual_effect.peak_at;
+
+                if (peak_at)
+                    ctx.globalAlpha = (duration_percent > peak_at ? 1 - (duration_percent - peak_at) / (1 - peak_at)
+                        : duration_percent / peak_at)
+
+                if (visual_effect.draw_callback)
+                {
+                    visual_effect.draw_callback(visual_effect);
+                } else
+                {
+                    ctx.drawImage(visual_effect.image,
+                        cell_middle[0] - resulting_width / 2, cell_middle[1] - resulting_height / 2,
+                        resulting_width, resulting_height);
+                }
+                ctx.globalAlpha = 1;
+
             }
-            ctx.globalAlpha = 1;
-
         }
     }
+
+    draw_visual_effects(false);
 
     // Draw players
     for (let i = 0; i < players.length; i++)
@@ -3561,43 +3569,7 @@ function draw(time) {
     ctx.beginPath();
 
     // Draw visual effects on top
-    for (let i = 0; i < visual_effects.length; i++)
-    {
-
-        const visual_effect = visual_effects[i];
-        if (visual_effect && visual_effect.on_top)
-        {
-            const entity = visual_effect.entity;
-
-            const resulting_width = cell_size * visual_effect.size;
-            const resulting_height = cell_size * visual_effect.size;
-
-            const cell_middle = entity ?
-                [entity.visual_x + cell_size / 2, entity.visual_y + cell_size / 2]
-                : visual_effect.x != null ?
-                    [visual_effect.x + cell_size / 2, visual_effect.y + cell_size / 2]
-                    : [visual_effect.cell_x * cell_size + cell_size / 2, visual_effect.cell_y * cell_size + cell_size / 2]
-
-            const duration_percent = visual_effect.time / visual_effect.duration;
-            const peak_at = visual_effect.peak_at;
-
-            if (peak_at)
-                ctx.globalAlpha = (duration_percent > peak_at ? 1 - (duration_percent - peak_at) / (1 - peak_at)
-                    : duration_percent / peak_at)
-
-            if (visual_effect.draw_callback)
-            {
-                visual_effect.draw_callback(visual_effect);
-            } else
-            {
-                ctx.drawImage(visual_effect.image,
-                    cell_middle[0] - resulting_width / 2, cell_middle[1] - resulting_height / 2,
-                    resulting_width, resulting_height);
-            }
-            ctx.globalAlpha = 1;
-
-        }
-    }
+    draw_visual_effects(true);
 
     ctx.closePath();
 
@@ -4304,7 +4276,8 @@ function handle_inputs() {
             Math.floor((mouse_position[1] - translation[1]) / cell_size)
         ]
 
-        if (area_board[clicked_cell[0]][clicked_cell[1]] == Cell_Type.WALL)
+        const clicked_in_bounds = clicked_cell[0] > 0 && clicked_cell[1] > 0 && clicked_cell[0] < world_area_size && clicked_cell[0] < world_area_size;
+        if (clicked_in_bounds && area_board[clicked_cell[0]][clicked_cell[1]] == Cell_Type.WALL)
         {
             const raw_position_x = (mouse_position[0] - translation[0]) / cell_size;
             const raw_position_y = (mouse_position[1] - translation[1]) / cell_size;
@@ -5243,4 +5216,17 @@ function get_cell_in_circle(middle_x, middle_y, radius) {
 
     return [middle_x + x, middle_y + y];
 }
+
+function createMulberry32(seed) {
+    console.log("seed", seed);
+    let t = seed >>> 0;
+    return function() {
+        t += 0x6D2B79F5;
+        let r = t;
+        r = Math.imul(r ^ (r >>> 15), r | 1);
+        r ^= r + Math.imul(r ^ (r >>> 7), r | 61);
+        return ((r ^ (r >>> 14)) >>> 0) / 0x100000000;
+    };
+}
+
 //#endregion -----------------------------------------------------------------------
